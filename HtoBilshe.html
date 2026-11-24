@@ -586,8 +586,8 @@
 
                 await roomRef.child('players/' + myPlayerId).update({
                     name: name,
-                    number: existingPlayer ? existingPlayer.number : null,
-                    ready: existingPlayer ? existingPlayer.ready : false,
+                    number: existingPlayer ? existingPlayer.number ?? null,
+                    ready: existingPlayer ? existingPlayer.ready ?? false,
                     joinedAt: existingPlayer ? existingPlayer.joinedAt : Date.now()
                 });
 
