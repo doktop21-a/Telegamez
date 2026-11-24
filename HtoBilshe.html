@@ -1010,7 +1010,7 @@
             const shareText = `🎲 Залітай у гру «Хто ближче?»! Кімната: ${currentRoomCode}
 ${gameUrl}`;
             if (tg && tg.openTelegramLink) {
-                const url = `https://t.me/share/url?url=&text=${encodeURIComponent(shareText)}`;
+                const url = `t.me/share/url?url=&text=${encodeURIComponent(shareText)}`;
                 tg.openTelegramLink(url);
             } else if (navigator.share) {
                 navigator.share({ title: 'Хто ближче?', text: shareText });
