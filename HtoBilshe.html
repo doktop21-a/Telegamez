@@ -975,18 +975,20 @@
             }
         }
 
-        function shareRoom() {
+                function shareRoom() {
             if (!currentRoomCode) return;
             const gameUrl = `https://t.me/HTBGame_bot/game1?startapp=${currentRoomCode}`;
-            const shareText = `🎲 Залітай у гру «Хто ближче?»!\nКод кімнати: ${currentRoomCode}`;
+            const shareText = `🎲 Залітай у гру «Хто ближче?» (кімната ${currentRoomCode}):\n${gameUrl}`;
             if (tg && tg.openTelegramLink) {
-                const url = `https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encodeURIComponent(shareText)}`;
+                const url = `https://t.me/share/url?url=&text=${encodeURIComponent(shareText)}`;
                 tg.openTelegramLink(url);
             } else if (navigator.share) {
-                navigator.share({ title: 'Хто ближче?', text: shareText, url: gameUrl });
+                navigator.share({ title: 'Хто ближче?', text: shareText });
             } else {
                 copyRoomCode();
             }
+                }
+        
         }
 
         function escapeHtml(str) {
