@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Хто ближче? — Онлайн мультиплеєр</title>
+    <!-- Telegram WebApp API -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Шрифт Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Конфеті для переможця -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a 60%, #020617);
+            color: #f8fafc;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.76);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+        }
+
+        .game-btn {
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .game-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        .game-btn:active:not(:disabled) {
+            transform: translateY(1px) scale(0.98);
+        }
+        .game-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-enter {
+            animation: fadeSlideUp 0.35s ease-out forwards;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% {
+                box-shadow: 0 0 25px rgba(99, 102, 241, 0.45);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 55px rgba(236, 72, 153, 0.85);
+                transform: scale(1.04);
+            }
+        }
+        .rolling-glow {
+            animation: pulseGlow 0.38s infinite;
+        }
+
+        .rank-1 {
+            background: linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(202, 138, 4, 0.08));
+            border-color: rgba(250, 204, 21, 0.55);
+        }
+        .rank-2 {
+            background: linear-gradient(135deg, rgba(148, 163, 184, 0.22), rgba(100, 116, 139, 0.08));
+            border-color: rgba(203, 213, 225, 0.45);
+        }
+        .rank-3 {
+            background: linear-gradient(135deg, rgba(217, 119, 6, 0.22), rgba(180, 83, 9, 0.08));
+            border-color: rgba(251, 146, 60, 0.45);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4 sm:p-6">
+
+    <!-- Сповіщення замість alert() -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- Модальне вікно налаштування нового раунду для ведучого -->
+    <div id="modal-new-round" class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="glass-panel rounded-3xl p-6 w-full max-w-md animate-enter border border-indigo-500/30">
+            <h3 class="text-xl font-extrabold text-white mb-2">🔄 Новий раунд</h3>
+            <p class="text-sm text-slate-300 mb-4">Ви можете залишити поточний діапазон або змінити його для наступного раунду:</p>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Мінімальне</label>
+                    <input type="number" id="modal-min-range" class="w-full bg-slate-800 border border-slate-600 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-center font-bold text-white outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Максимальне</label>
+                    <input type="number" id="modal-max-range" class="w-full bg-slate-800 border border-slate-600 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-center font-bold text-white outline-none">
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button type="button" id="btn-cancel-new-round" class="game-btn flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm">
+                    Скасувати
+                </button>
+                <button type="button" id="btn-confirm-new-round" class="game-btn flex-1 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm shadow-lg shadow-indigo-600/30">
+                    Почати раунд
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <main class="w-full max-w-xl">
+        <!-- Шапка гри -->
+        <header class="text-center mb-5 sm:mb-7">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs sm:text-sm font-semibold mb-2.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Онлайн-гра для компанії</span>
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black tracking-tight bg-gradient-to-r from-white via-indigo-200 to-pink-200 bg-clip-text text-transparent">
+                Хто ближче?
+            </h1>
+            <p class="text-slate-400 text-xs sm:text-sm mt-1.5">
+                Кожен загадує число зі свого телефону — перемагає найточніший!
+            </p>
+        </header>
+
+        <!-- ЕКРАН ЗАВАНТАЖЕННЯ / ПІДКЛЮЧЕННЯ ДО СЕРВЕРА -->
+        <section id="screen-loading" class="glass-panel rounded-3xl p-8 text-center animate-enter">
+            <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p class="text-slate-200 font-semibold">Підключення до ігрового сервера...</p>
+            <p class="text-xs text-slate-400 mt-1">Синхронізація профілю</p>
+        </section>
+
+        <!-- ЕКРАН 1: СТАРТОВЕ МЕНЮ (СТВОРИТИ АБО ПРИЄДНАТИСЯ) -->
+        <section id="screen-home" class="glass-panel rounded-3xl p-5 sm:p-8 hidden">
+            <!-- Блок імені гравця -->
+            <div class="mb-6">
+                <label for="input-player-name" class="block text-xs uppercase tracking-wider font-bold text-indigo-300 mb-2">
+                    Твоє ім'я у грі
+                </label>
+                <div class="relative">
+                    <input type="text" id="input-player-name" maxlength="24" placeholder="Введи своє ім'я..."
+                        class="w-full bg-slate-900/80 border border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 rounded-2xl px-4 py-3.5 text-base sm:text-lg font-bold text-white placeholder-slate-500 outline-none transition">
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-lg">👤</span>
+                </div>
+            </div>
+
+            <!-- Вкладки: Створити кімнату / Приєднатися -->
+            <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-900/80 rounded-2xl border border-slate-700/60 mb-6">
+                <button type="button" id="tab-create"
+                    class="py-2.5 px-3 rounded-xl font-bold text-sm transition bg-indigo-600 text-white shadow-md">
+                    ✨ Створити кімнату
+                </button>
+                <button type="button" id="tab-join"
+                    class="py-2.5 px-3 rounded-xl font-bold text-sm transition text-slate-400 hover:text-white">
+                    🔑 Увійти за кодом
+                </button>
+            </div>
+
+            <!-- Вкладка 1: Створення кімнати -->
+            <div id="panel-create" class="space-y-5">
+                <div class="bg-slate-900/60 rounded-2xl p-4 border border-slate-700/60">
+                    <label class="block text-sm font-semibold text-slate-300 mb-3">
+                        Діапазон чисел для раунду
+                    </label>
+                    <div class="grid grid-cols-2 gap-3 items-center">
+                        <div>
+                            <span class="block text-xs text-slate-400 mb-1">Від (Мін)</span>
+                            <input type="number" id="create-min-range" value="1"
+                                class="w-full bg-slate-800 border border-slate-600 focus:border-indigo-500 rounded-xl px-3 py-3 text-lg font-bold text-white text-center outline-none transition">
+                        </div>
+                        <div>
+                            <span class="block text-xs text-slate-400 mb-1">До (Макс)</span>
+                            <input type="number" id="create-max-range" value="100"
+                                class="w-full bg-slate-800 border border-slate-600 focus:border-indigo-500 rounded-xl px-3 py-3 text-lg font-bold text-white text-center outline-none transition">
+                        </div>
+                    </div>
+                    <!-- Швидкі пресети -->
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <button type="button" data-preset="1,50" class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">1 – 50</button>
+                        <button type="button" data-preset="1,100" class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">1 – 100</button>
+                        <button type="button" data-preset="1,500" class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">1 – 500</button>
+                        <button type="button" data-preset="1,1000" class="preset-btn text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">1 – 1000</button>
+                    </div>
+                </div>
+
+                <button type="button" id="btn-create-room"
+                    class="game-btn w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-base sm:text-lg shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2">
+                    <span>🚀 Створити кімнату</span>
+                </button>
+            </div>
+
+            <!-- Вкладка 2: Приєднання до кімнати -->
+            <div id="panel-join" class="space-y-5 hidden">
+                <div class="bg-slate-900/60 rounded-2xl p-4 sm:p-5 border border-slate-700/60 text-center">
+                    <label for="input-room-code" class="block text-sm font-semibold text-slate-300 mb-3">
+                        Введи 4-значний код кімнати
+                    </label>
+                    <input type="text" id="input-room-code" inputmode="numeric" maxlength="4" placeholder="0000"
+                        class="w-48 mx-auto block bg-slate-800 border-2 border-slate-600 focus:border-emerald-500 rounded-2xl px-4 py-3.5 text-3xl sm:text-4xl font-black tracking-[0.35em] text-white text-center placeholder-slate-600 outline-none transition">
+                    <p class="text-xs text-slate-400 mt-3">Запитай код у того, хто створив гру, або перейди за його посиланням</p>
+                </div>
+
+                <button type="button" id="btn-join-room"
+                    class="game-btn w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-base sm:text-lg shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2">
+                    <span>🚪 Увійти в кімнату</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- ЕКРАН 2: ЛОБІ ТА ВВЕДЕННЯ ЧИСЛА ГРАВЦЕМ -->
+        <section id="screen-lobby" class="glass-panel rounded-3xl p-5 sm:p-7 hidden">
+            <!-- Верхня панель з кодом кімнати та кнопками поширення -->
+            <div class="bg-slate-900/80 border border-indigo-500/30 rounded-2xl p-4 mb-5">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <span class="block text-[11px] uppercase tracking-wider text-slate-400 font-bold">Код кімнати</span>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span id="lobby-room-code" class="text-3xl sm:text-4xl font-black tracking-widest text-indigo-400">----</span>
+                            <button type="button" id="btn-copy-code" title="Скопіювати код"
+                                class="game-btn p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold flex items-center gap-1">
+                                <span>📋 Код</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="btn-share-room"
+                            class="game-btn px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/25 flex items-center gap-1.5">
+                            <span>📤 Запросити друзів</span>
+                        </button>
+                        <button type="button" id="btn-leave-lobby" title="Вийти з кімнати"
+                            class="game-btn p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950/70 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs font-semibold">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs sm:text-sm">
+                    <span class="text-slate-400">Діапазон чисел:</span>
+                    <span id="lobby-range-display" class="font-extrabold text-white bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">1 — 100</span>
+                </div>
+            </div>
+
+            <!-- Форма введення числа для поточного гравця -->
+            <div class="bg-gradient-to-br from-slate-900/90 to-indigo-950/40 border border-indigo-500/30 rounded-2xl p-4 sm:p-5 mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <label for="input-my-guess" class="text-sm font-bold text-white">
+                        Твоє секретне число:
+                    </label>
+                    <span id="my-status-badge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                        Очікує вибору
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2.5 mt-3">
+                    <input type="number" inputmode="numeric" id="input-my-guess" placeholder="Введи число..."
+                        class="flex-1 bg-slate-950/80 border-2 border-slate-600 focus:border-emerald-500 rounded-xl px-4 py-3 text-xl font-black text-white text-center placeholder-slate-600 outline-none transition">
+
+                    <button type="button" id="btn-random-guess" title="Випадкове число"
+                        class="game-btn w-13 h-13 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xl flex items-center justify-center">
+                        🎲
+                    </button>
+                </div>
+
+                <button type="button" id="btn-submit-guess"
+                    class="game-btn w-full mt-3 py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-base shadow-lg shadow-emerald-600/20">
+                    ✅ Підтвердити число
+                </button>
+            </div>
+
+            <!-- Список гравців у кімнаті (синхронізується в реальному часі) -->
+            <div class="mb-5">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                        Учасники в кімнаті (<span id="lobby-players-count">0</span>)
+                    </h3>
+                    <span id="lobby-ready-count" class="text-xs font-semibold text-emerald-400">0 готові</span>
+                </div>
+                <div id="lobby-players-list" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    <!-- Картки учасників рендеряться динамічно -->
+                </div>
+            </div>
+
+            <!-- Панель керування для ведучого (творця кімнати) -->
+            <div id="host-controls-panel" class="hidden pt-3 border-t border-slate-700/70">
+                <button type="button" id="btn-finish-round"
+                    class="game-btn w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-black text-base sm:text-lg shadow-xl shadow-pink-600/25 flex items-center justify-center gap-2">
+                    <span>🏆 Визначити переможця!</span>
+                </button>
+                <p id="host-hint-text" class="text-center text-xs text-slate-400 mt-2">
+                    Натисни, коли всі учасники зроблять свій вибір
+                </p>
+            </div>
+
+            <!-- Повідомлення для звичайних гравців -->
+            <div id="guest-waiting-panel" class="hidden pt-3 border-t border-slate-700/70 text-center">
+                <p class="text-xs sm:text-sm text-slate-400">
+                    ⏳ Очікуємо, поки <span id="host-name-label" class="font-bold text-indigo-300">ведучий</span> запустить визначення переможця...
+                </p>
+            </div>
+        </section>
+
+        <!-- ЕКРАН 3: РЕЗУЛЬТАТИ РАУНДУ (СИНХРОНІЗОВАНО ДЛЯ ВСІХ) -->
+        <section id="screen-results" class="glass-panel rounded-3xl p-5 sm:p-8 hidden">
+            <!-- Блок загаданого (цільового) числа -->
+            <div class="text-center mb-6">
+                <span class="inline-block text-xs uppercase tracking-widest font-bold text-indigo-300 mb-2">
+                    Випало цільове число
+                </span>
+                <div id="target-number-card"
+                    class="mx-auto w-36 h-36 sm:w-44 sm:h-44 rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-1 shadow-2xl">
+                    <div class="w-full h-full rounded-[20px] bg-slate-950/90 flex flex-col items-center justify-center">
+                        <span id="target-number-display" class="text-5xl sm:text-6xl font-black text-white tracking-tight">
+                            ?
+                        </span>
+                        <span id="target-range-sub" class="text-xs text-slate-400 mt-1">діапазон 1 — 100</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Контейнер результатів (відкривається після рулетки) -->
+            <div id="results-content" class="hidden animate-enter">
+                <!-- Візуальна шкала -->
+                <div class="bg-slate-900/70 rounded-2xl p-4 border border-slate-700/60 mb-5">
+                    <div class="flex justify-between text-xs text-slate-400 mb-2">
+                        <span id="scale-min-label">1</span>
+                        <span class="text-slate-300 font-medium">Шкала близькості до цілі</span>
+                        <span id="scale-max-label">100</span>
+                    </div>
+                    <div id="number-line-track" class="relative h-8 bg-slate-800 rounded-xl border border-slate-700 my-2"></div>
+                    <div class="flex items-center justify-center gap-4 text-[11px] text-slate-400 mt-2">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-pink-500 inline-block"></span> Випало число</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span> 1 місце</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span> Інші гравці</span>
+                    </div>
+                </div>
+
+                <!-- Турнірна таблиця -->
+                <div class="mb-6">
+                    <h3 class="text-base sm:text-lg font-bold text-white mb-3 flex items-center gap-2">
+                        <span>🏆</span>
+                        <span>Місця (від найближчого до найдальшого):</span>
+                    </h3>
+                    <div id="leaderboard-list" class="space-y-2.5"></div>
+                </div>
+
+                <!-- Кнопки після раунду -->
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="button" id="btn-open-new-round"
+                        class="hidden game-btn flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm sm:text-base shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2">
+                        <span>🔄 Новий раунд</span>
+                    </button>
+                    <button type="button" id="btn-leave-results"
+                        class="game-btn py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-sm sm:text-base flex items-center justify-center gap-2">
+                        <span>🚪 Вийти з кімнати</span>
+                    </button>
+                </div>
+                <p id="guest-next-round-hint" class="hidden text-center text-xs text-slate-400 mt-3">
+                    Очікуємо, поки ведучий розпочне наступний раунд...
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Підключення Firebase SDK (Modular ES Modules) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            doc,
+            getDoc,
+            setDoc,
+            updateDoc,
+            onSnapshot,
+            deleteField
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Глобальні змінні середовища Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        let app = null;
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+        let unsubscribeRoom = null;
+
+        // Локальний стан клієнта
+        const state = {
+            roomCode: null,
+            roomData: null,
+            lastAnimatedRound: null,
+            isAnimating: false
+        };
+
+        // Ініціалізація Telegram WebApp API
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Посилання на DOM-елементи
+        const screens = {
+            loading: document.getElementById('screen-loading'),
+            home: document.getElementById('screen-home'),
+            lobby: document.getElementById('screen-lobby'),
+            results: document.getElementById('screen-results')
+        };
+
+        const elPlayerName = document.getElementById('input-player-name');
+        const elCreateMin = document.getElementById('create-min-range');
+        const elCreateMax = document.getElementById('create-max-range');
+        const elRoomCodeInput = document.getElementById('input-room-code');
+
+        // Перемикання екранів
+        function showScreen(screenName) {
+            Object.entries(screens).forEach(([key, el]) => {
+                if (key === screenName) {
+                    el.classList.remove('hidden');
+                    el.classList.remove('animate-enter');
+                    void el.offsetWidth;
+                    el.classList.add('animate-enter');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        // Сповіщення замість alert()
+        function showToast(message, type = 'error') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const styles = {
+                error: 'bg-rose-600/95 border-rose-400/50 text-white',
+                success: 'bg-emerald-600/95 border-emerald-400/50 text-white',
+                info: 'bg-indigo-600/95 border-indigo-400/50 text-white'
+            };
+            const icons = { error: '⚠️', success: '✅', info: 'ℹ️' };
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl border shadow-xl text-sm font-semibold flex items-center gap-2.5 animate-enter ${styles[type] || styles.info}`;
+            toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                toast.style.transition = 'all 0.25s ease';
+                setTimeout(() => toast.remove(), 250);
+            }, 3200);
+        }
+
+        // Копіювання тексту в буфер обміну з fallback для iFrame
+        function copyTextToClipboard(text, successMsg = 'Скопійовано!') {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(successMsg, 'success');
+            } catch (err) {
+                showToast('Не вдалося скопіювати автоматично', 'error');
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // Генерація випадкового цілого числа
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Отримання шляху до документа кімнати в Firestore (згідно з правилом /artifacts/{appId}/public/data/rooms/{roomCode})
+        function getRoomDocRef(roomCode) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+        }
+
+        // Підстановка імені з Telegram або попереднього сеансу
+        function initPlayerName() {
+            let initialName = '';
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                const u = tg.initDataUnsafe.user;
+                initialName = [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
+            }
+            if (!initialName && window.name && window.name.startsWith('kb_name:')) {
+                initialName = window.name.replace('kb_name:', '');
+            }
+            elPlayerName.value = initialName;
+
+            elPlayerName.addEventListener('input', () => {
+                window.name = 'kb_name:' + elPlayerName.value.trim();
+            });
+        }
+
+        // Перевірка параметра ?room=XXXX у URL або startapp у Telegram
+        function getRoomCodeFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const roomParam = params.get('room');
+            if (roomParam && /^\d{4}$/.test(roomParam.trim())) {
+                return roomParam.trim();
+            }
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
+                const sp = tg.initDataUnsafe.start_param.replace('room_', '').trim();
+                if (/^\d{4}$/.test(sp)) return sp;
+            }
+            return null;
+        }
+
+        // Ініціалізація Firebase та автентифікація
+        async function bootstrapApp() {
+            initPlayerName();
+
+            if (!firebaseConfig) {
+                showToast('Помилка конфігурації бази даних.', 'error');
+                return;
+            }
+
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                if (!currentUser) {
+                    throw new Error('Не вдалося авторизуватися');
+                }
+
+                // Перевіряємо, чи перейшов гравець за прямим посиланням ?room=XXXX
+                const urlRoomCode = getRoomCodeFromUrl();
+                if (urlRoomCode) {
+                    elRoomCodeInput.value = urlRoomCode;
+                    switchHomeTab('join');
+                    if (elPlayerName.value.trim()) {
+                        await joinRoom(urlRoomCode);
+                        return;
+                    } else {
+                        showScreen('home');
+                        showToast(`Введи своє ім'я, щоб увійти в кімнату #${urlRoomCode}`, 'info');
+                        elPlayerName.focus();
+                        return;
+                    }
+                }
+
+                showScreen('home');
+            } catch (err) {
+                console.error('Auth/Init error:', err);
+                showToast('Помилка підключення до сервера. Оновіть сторінку.', 'error');
+            }
+        }
+
+        // Керування вкладками на головному екрані
+        const tabCreate = document.getElementById('tab-create');
+        const tabJoin = document.getElementById('tab-join');
+        const panelCreate = document.getElementById('panel-create');
+        const panelJoin = document.getElementById('panel-join');
+
+        function switchHomeTab(tab) {
+            if (tab === 'create') {
+                tabCreate.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition bg-indigo-600 text-white shadow-md';
+                tabJoin.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition text-slate-400 hover:text-white';
+                panelCreate.classList.remove('hidden');
+                panelJoin.classList.add('hidden');
+            } else {
+                tabJoin.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition bg-emerald-600 text-white shadow-md';
+                tabCreate.className = 'py-2.5 px-3 rounded-xl font-bold text-sm transition text-slate-400 hover:text-white';
+                panelJoin.classList.remove('hidden');
+                panelCreate.classList.add('hidden');
+            }
+        }
+
+        tabCreate.addEventListener('click', () => switchHomeTab('create'));
+        tabJoin.addEventListener('click', () => switchHomeTab('join'));
+
+        // Пресети діапазону
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const [min, max] = btn.dataset.preset.split(',');
+                elCreateMin.value = min;
+                elCreateMax.value = max;
+            });
+        });
+
+        // Створення нової кімнати в Firestore
+        document.getElementById('btn-create-room').addEventListener('click', async () => {
+            if (!currentUser) return;
+
+            const playerName = elPlayerName.value.trim();
+            if (!playerName) {
+                showToast("Будь ласка, введи своє ім'я!");
+                elPlayerName.focus();
+                return;
+            }
+
+            const min = parseInt(elCreateMin.value, 10);
+            const max = parseInt(elCreateMax.value, 10);
+
+            if (isNaN(min) || isNaN(max) || min >= max) {
+                showToast('Мінімальне число має бути меншим за максимальне!');
+                return;
+            }
+
+            const btn = document.getElementById('btn-create-room');
+            btn.disabled = true;
+
+            try {
+                // Генеруємо вільний 4-значний код
+                let code = '';
+                for (let attempt = 0; attempt < 10; attempt++) {
+                    const candidate = String(getRandomInt(1000, 9999));
+                    const snap = await getDoc(getRoomDocRef(candidate));
+                    if (!snap.exists()) {
+                        code = candidate;
+                        break;
+                    }
+                }
+                if (!code) {
+                    code = String(getRandomInt(1000, 9999));
+                }
+
+                const newRoom = {
+                    code,
+                    hostId: currentUser.uid,
+                    minRange: min,
+                    maxRange: max,
+                    status: 'lobby', // 'lobby' | 'results'
+                    round: 1,
+                    targetNumber: null,
+                    createdAt: Date.now(),
+                    players: {
+                        [currentUser.uid]: {
+                            uid: currentUser.uid,
+                            name: playerName,
+                            guess: null,
+                            joinedAt: Date.now()
+                        }
+                    }
+                };
+
+                await setDoc(getRoomDocRef(code), newRoom);
+                subscribeToRoom(code);
+            } catch (err) {
+                console.error('Create room error:', err);
+                showToast('Не вдалося створити кімнату. Спробуй ще раз.');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Кнопка приєднання до кімнати
+        document.getElementById('btn-join-room').addEventListener('click', async () => {
+            const code = elRoomCodeInput.value.trim();
+            await joinRoom(code);
+        });
+
+        // Логіка входу в існуючу кімнату
+        async function joinRoom(code) {
+            if (!currentUser) return;
+
+            const playerName = elPlayerName.value.trim();
+            if (!playerName) {
+                showToast("Спочатку введи своє ім'я!");
+                elPlayerName.focus();
+                return;
+            }
+
+            if (!/^\d{4}$/.test(code)) {
+                showToast('Введи коректний 4-значний код кімнати!');
+                elRoomCodeInput.focus();
+                return;
+            }
+
+            const btn = document.getElementById('btn-join-room');
+            btn.disabled = true;
+
+            try {
+                const roomRef = getRoomDocRef(code);
+                const snap = await getDoc(roomRef);
+
+                if (!snap.exists()) {
+                    showToast(`Кімнату #${code} не знайдено! Перевір код.`);
+                    return;
+                }
+
+                const data = snap.data();
+                const existingPlayer = data.players && data.players[currentUser.uid];
+
+                // Реєструємо або оновлюємо гравця в кімнаті
+                await updateDoc(roomRef, {
+                    [`players.${currentUser.uid}`]: {
+                        uid: currentUser.uid,
+                        name: playerName,
+                        guess: existingPlayer && existingPlayer.guess !== undefined ? existingPlayer.guess : null,
+                        joinedAt: existingPlayer ? existingPlayer.joinedAt : Date.now()
+                    }
+                });
+
+                subscribeToRoom(code);
+            } catch (err) {
+                console.error('Join room error:', err);
+                showToast('Помилка входу в кімнату.');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Підписка на оновлення кімнати в реальному часі
+        function subscribeToRoom(code) {
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+            }
+
+            state.roomCode = code;
+            state.lastAnimatedRound = null;
+            const roomRef = getRoomDocRef(code);
+
+            unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
+                if (!docSnap.exists()) {
+                    showToast('Кімнату було закрито.', 'info');
+                    leaveRoomLocally();
+                    return;
+                }
+
+                const data = docSnap.data();
+                state.roomData = data;
+
+                if (data.status === 'lobby') {
+                    renderLobby(data);
+                } else if (data.status === 'results') {
+                    renderResults(data);
+                }
+            }, (error) => {
+                console.error('Room snapshot error:', error);
+                showToast('Втрачено зв’язок із кімнатою.', 'error');
+            });
+        }
+
+        // Вихід із кімнати
+        async function leaveRoom() {
+            if (!currentUser || !state.roomCode) {
+                leaveRoomLocally();
+                return;
+            }
+            try {
+                const roomRef = getRoomDocRef(state.roomCode);
+                await updateDoc(roomRef, {
+                    [`players.${currentUser.uid}`]: deleteField()
+                });
+            } catch (e) {
+                // Ігноруємо помилку при виході
+            }
+            leaveRoomLocally();
+        }
+
+        function leaveRoomLocally() {
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+            state.roomCode = null;
+            state.roomData = null;
+            state.lastAnimatedRound = null;
+            document.getElementById('input-my-guess').value = '';
+            showScreen('home');
+        }
+
+        document.getElementById('btn-leave-lobby').addEventListener('click', leaveRoom);
+        document.getElementById('btn-leave-results').addEventListener('click', leaveRoom);
+
+        // Копіювання коду кімнати
+        document.getElementById('btn-copy-code').addEventListener('click', () => {
+            if (state.roomCode) {
+                copyTextToClipboard(state.roomCode, `Код кімнати ${state.roomCode} скопійовано!`);
+            }
+        });
+
+        // Поділитися посиланням на кімнату
+        document.getElementById('btn-share-room').addEventListener('click', async () => {
+            if (!state.roomCode) return;
+
+            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${state.roomCode}`;
+            const shareText = `🎯 Заходь у гру «Хто ближче?»!\nКод кімнати: ${state.roomCode}\nПосилання: ${shareUrl}`;
+
+            if (tg && typeof tg.openTelegramLink === 'function') {
+                const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(`🎯 Заходь у гру «Хто ближче?»! Код кімнати: ${state.roomCode}`)}`;
+                tg.openTelegramLink(tgShareUrl);
+                return;
+            }
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Гра «Хто ближче?»',
+                        text: `Заходь у кімнату #${state.roomCode}!`,
+                        url: shareUrl
+                    });
+                    return;
+                } catch (e) {
+                    // Користувач скасував або share недоступний
+                }
+            }
+
+            copyTextToClipboard(shareText, 'Посилання та код кімнати скопійовано!');
+        });
+
+        // Рендер екрану лобі
+        function renderLobby(data) {
+            if (screens.lobby.classList.contains('hidden')) {
+                showScreen('lobby');
+            }
+
+            const isHost = data.hostId === currentUser.uid;
+            document.getElementById('lobby-room-code').textContent = data.code;
+            document.getElementById('lobby-range-display').textContent = `${data.minRange} — ${data.maxRange}`;
+
+            const inputGuess = document.getElementById('input-my-guess');
+            inputGuess.min = data.minRange;
+            inputGuess.max = data.maxRange;
+            inputGuess.placeholder = `${data.minRange} .. ${data.maxRange}`;
+
+            const playersObj = data.players || {};
+            const playersArr = Object.values(playersObj).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+
+            // Статус поточного гравця
+            const me = playersObj[currentUser.uid];
+            const myBadge = document.getElementById('my-status-badge');
+            const submitBtn = document.getElementById('btn-submit-guess');
+
+            if (me && me.guess !== null && me.guess !== undefined) {
+                myBadge.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30';
+                myBadge.textContent = `✅ Обрано: ${me.guess}`;
+                submitBtn.textContent = '🔄 Змінити моє число';
+                if (document.activeElement !== inputGuess && inputGuess.value === '') {
+                    inputGuess.value = me.guess;
+                }
+            } else {
+                myBadge.className = 'text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30';
+                myBadge.textContent = '⏳ Очікує вибору';
+                submitBtn.textContent = '✅ Підтвердити число';
+            }
+
+            // Список гравців (без розкриття їхніх чисел!)
+            const listEl = document.getElementById('lobby-players-list');
+            listEl.innerHTML = '';
+            let readyCount = 0;
+
+            playersArr.forEach(p => {
+                const hasGuessed = p.guess !== null && p.guess !== undefined;
+                if (hasGuessed) readyCount++;
+
+                const isMe = p.uid === currentUser.uid;
+                const isRoomHost = p.uid === data.hostId;
+
+                const row = document.createElement('div');
+                row.className = `flex items-center justify-between px-3.5 py-2.5 rounded-xl border ${
+                    hasGuessed
+                        ? 'bg-emerald-950/30 border-emerald-500/30'
+                        : 'bg-slate-900/70 border-slate-700/60'
+                }`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-base">${isRoomHost ? '👑' : '🎮'}</span>
+                        <span class="font-bold text-sm text-white truncate">${escapeHtml(p.name)}</span>
+                        ${isMe ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 font-semibold">Ти</span>' : ''}
+                    </div>
+                    <div class="shrink-0 text-xs font-semibold">
+                        ${hasGuessed
+                            ? '<span class="text-emerald-400">✅ Готовий (приховано)</span>'
+                            : '<span class="text-slate-400">⏳ Обирає...</span>'
+                        }
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+
+            document.getElementById('lobby-players-count').textContent = playersArr.length;
+            document.getElementById('lobby-ready-count').textContent = `${readyCount} з ${playersArr.length} готові`;
+
+            // Панель ведучого або гостя
+            const hostPanel = document.getElementById('host-controls-panel');
+            const guestPanel = document.getElementById('guest-waiting-panel');
+
+            if (isHost) {
+                hostPanel.classList.remove('hidden');
+                guestPanel.classList.add('hidden');
+                const finishBtn = document.getElementById('btn-finish-round');
+                finishBtn.disabled = readyCount === 0;
+                document.getElementById('host-hint-text').textContent =
+                    readyCount === 0
+                        ? 'Хоча б один учасник має підтвердити число'
+                        : `Готові ${readyCount} з ${playersArr.length}. Можна визначати переможця!`;
+            } else {
+                hostPanel.classList.add('hidden');
+                guestPanel.classList.remove('hidden');
+                const hostPlayer = playersObj[data.hostId];
+                document.getElementById('host-name-label').textContent = hostPlayer ? hostPlayer.name : 'ведучий';
+            }
+        }
+
+        // Випадкове число для себе
+        document.getElementById('btn-random-guess').addEventListener('click', () => {
+            if (!state.roomData) return;
+            const rnd = getRandomInt(state.roomData.minRange, state.roomData.maxRange);
+            document.getElementById('input-my-guess').value = rnd;
+        });
+
+        // Відправка свого числа в Firestore
+        document.getElementById('btn-submit-guess').addEventListener('click', async () => {
+            if (!currentUser || !state.roomCode || !state.roomData) return;
+
+            const rawVal = document.getElementById('input-my-guess').value;
+            const val = parseInt(rawVal, 10);
+            const { minRange, maxRange } = state.roomData;
+
+            if (isNaN(val)) {
+                showToast('Введи своє число!');
+                return;
+            }
+            if (val < minRange || val > maxRange) {
+                showToast(`Число має бути в межах від ${minRange} до ${maxRange}!`);
+                return;
+            }
+
+            const btn = document.getElementById('btn-submit-guess');
+            btn.disabled = true;
+
+            try {
+                const roomRef = getRoomDocRef(state.roomCode);
+                await updateDoc(roomRef, {
+                    [`players.${currentUser.uid}.guess`]: val
+                });
+                showToast(`Число ${val} збережено!`, 'success');
+            } catch (err) {
+                console.error('Submit guess error:', err);
+                showToast('Помилка збереження числа.');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Ведучий запускає визначення переможця
+        document.getElementById('btn-finish-round').addEventListener('click', async () => {
+            if (!currentUser || !state.roomCode || !state.roomData) return;
+            if (state.roomData.hostId !== currentUser.uid) return;
+
+            const btn = document.getElementById('btn-finish-round');
+            btn.disabled = true;
+
+            try {
+                const targetNumber = getRandomInt(state.roomData.minRange, state.roomData.maxRange);
+                const roomRef = getRoomDocRef(state.roomCode);
+
+                await updateDoc(roomRef, {
+                    status: 'results',
+                    targetNumber: targetNumber
+                });
+            } catch (err) {
+                console.error('Finish round error:', err);
+                showToast('Не вдалося завершити раунд.');
+                btn.disabled = false;
+            }
+        });
+
+        // Рендер результатів для всіх гравців
+        function renderResults(data) {
+            if (screens.results.classList.contains('hidden')) {
+                showScreen('results');
+            }
+
+            const isHost = data.hostId === currentUser.uid;
+            const targetNumber = data.targetNumber;
+            const min = data.minRange;
+            const max = data.maxRange;
+
+            document.getElementById('target-range-sub').textContent = `діапазон ${min} — ${max}`;
+
+            // Кнопки керування після раунду
+            const btnNewRound = document.getElementById('btn-open-new-round');
+            const guestHint = document.getElementById('guest-next-round-hint');
+            if (isHost) {
+                btnNewRound.classList.remove('hidden');
+                guestHint.classList.add('hidden');
+            } else {
+                btnNewRound.classList.add('hidden');
+                guestHint.classList.remove('hidden');
+            }
+
+            const resultsContent = document.getElementById('results-content');
+            const targetCard = document.getElementById('target-number-card');
+            const targetDisplay = document.getElementById('target-number-display');
+
+            // Запускаємо анімацію барабана один раз на раунд
+            if (state.lastAnimatedRound !== data.round) {
+                state.lastAnimatedRound = data.round;
+                resultsContent.classList.add('hidden');
+                targetCard.classList.add('rolling-glow');
+
+                const duration = 1300;
+                const startTime = Date.now();
+                const timer = setInterval(() => {
+                    if (Date.now() - startTime >= duration) {
+                        clearInterval(timer);
+                        targetDisplay.textContent = targetNumber;
+                        targetCard.classList.remove('rolling-glow');
+                        populateLeaderboardAndScale(data);
+                        resultsContent.classList.remove('hidden');
+
+                        if (typeof confetti === 'function') {
+                            confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
+                        }
+                    } else {
+                        targetDisplay.textContent = getRandomInt(min, max);
+                    }
+                }, 55);
+            } else {
+                targetDisplay.textContent = targetNumber;
+                targetCard.classList.remove('rolling-glow');
+                populateLeaderboardAndScale(data);
+                resultsContent.classList.remove('hidden');
+            }
+        }
+
+        // Формування турнірної таблиці та числової шкали
+        function populateLeaderboardAndScale(data) {
+            const targetNumber = data.targetNumber;
+            const min = data.minRange;
+            const max = data.maxRange;
+            const playersObj = data.players || {};
+
+            const activePlayers = [];
+            const skippedPlayers = [];
+
+            Object.values(playersObj).forEach(p => {
+                if (p.guess !== null && p.guess !== undefined) {
+                    activePlayers.push({
+                        ...p,
+                        diff: Math.abs(p.guess - targetNumber)
+                    });
+                } else {
+                    skippedPlayers.push(p);
+                }
+            });
+
+            // Сортування від найменшої різниці до найбільшої
+            activePlayers.sort((a, b) => a.diff - b.diff);
+
+            let currentPlace = 1;
+            activePlayers.forEach((player, idx) => {
+                if (idx > 0 && player.diff > activePlayers[idx - 1].diff) {
+                    currentPlace = idx + 1;
+                }
+                player.place = currentPlace;
+            });
+
+            // Рендер шкали
+            const span = max - min || 1;
+            document.getElementById('scale-min-label').textContent = min;
+            document.getElementById('scale-max-label').textContent = max;
+
+            const track = document.getElementById('number-line-track');
+            track.innerHTML = '';
+
+            activePlayers.forEach(p => {
+                const percent = Math.max(0, Math.min(100, ((p.guess - min) / span) * 100));
+                const dot = document.createElement('div');
+                const isWinner = p.place === 1;
+                dot.style.left = `calc(${percent}% - 6px)`;
+                dot.title = `${p.name}: ${p.guess} (різниця: ${p.diff})`;
+                dot.className = `absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-slate-950 ${
+                    isWinner ? 'bg-amber-400 z-20 scale-125 shadow-md shadow-amber-400/50' : 'bg-indigo-400 z-10 opacity-85'
+                }`;
+                track.appendChild(dot);
+            });
+
+            const targetPercent = Math.max(0, Math.min(100, ((targetNumber - min) / span) * 100));
+            const targetMarker = document.createElement('div');
+            targetMarker.style.left = `calc(${targetPercent}% - 2px)`;
+            targetMarker.className = 'absolute top-0 bottom-0 w-1 bg-pink-500 z-30 rounded-full shadow-[0_0_10px_#ec4899]';
+            track.appendChild(targetMarker);
+
+            // Рендер таблиці місць
+            const leaderboardEl = document.getElementById('leaderboard-list');
+            leaderboardEl.innerHTML = '';
+
+            activePlayers.forEach(p => {
+                let rankClass = 'bg-slate-900/70 border-slate-700/70';
+                let medalIcon = '🎯';
+                if (p.place === 1) { rankClass = 'rank-1'; medalIcon = '🥇'; }
+                else if (p.place === 2) { rankClass = 'rank-2'; medalIcon = '🥈'; }
+                else if (p.place === 3) { rankClass = 'rank-3'; medalIcon = '🥉'; }
+
+                const isMe = p.uid === currentUser.uid;
+                const exactBadge = p.diff === 0
+                    ? '<span class="ml-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">В яблучко!</span>'
+                    : '';
+
+                const card = document.createElement('div');
+                card.className = `rounded-2xl border p-3.5 sm:p-4 flex items-center justify-between gap-3 ${rankClass}`;
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="text-2xl shrink-0">${medalIcon}</span>
+                        <div class="min-w-0">
+                            <div class="flex items-center flex-wrap gap-1">
+                                <span class="font-extrabold text-sm sm:text-base text-white">
+                                    ${p.place}. Місце — ${escapeHtml(p.name)}
+                                </span>
+                                ${isMe ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 font-semibold">Ти</span>' : ''}
+                                ${exactBadge}
+                            </div>
+                            <p class="text-xs text-slate-300 mt-0.5">
+                                Число: <span class="font-bold text-white">${p.guess}</span>
+                                <span class="mx-1.5 text-slate-500">•</span>
+                                Різниця: <span class="font-bold ${p.diff === 0 ? 'text-emerald-400' : 'text-indigo-300'}">${p.diff}</span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="shrink-0 px-3 py-1 rounded-xl bg-slate-950/60 border border-white/10 text-sm font-black text-white">
+                        ${p.guess}
+                    </div>
+                `;
+                leaderboardEl.appendChild(card);
+            });
+
+            // Якщо хтось не встиг зробити ставку в цьому раунді
+            skippedPlayers.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'rounded-2xl border border-slate-800 bg-slate-900/40 p-3 flex items-center justify-between text-slate-500 text-xs';
+                card.innerHTML = `
+                    <span>— ${escapeHtml(p.name)}</span>
+                    <span>Не встиг(ла) обрати число</span>
+                `;
+                leaderboardEl.appendChild(card);
+            });
+        }
+
+        // Модальне вікно нового раунду (для ведучого)
+        const modalNewRound = document.getElementById('modal-new-round');
+        document.getElementById('btn-open-new-round').addEventListener('click', () => {
+            if (!state.roomData) return;
+            document.getElementById('modal-min-range').value = state.roomData.minRange;
+            document.getElementById('modal-max-range').value = state.roomData.maxRange;
+            modalNewRound.classList.remove('hidden');
+            modalNewRound.classList.add('flex');
+        });
+
+        document.getElementById('btn-cancel-new-round').addEventListener('click', () => {
+            modalNewRound.classList.add('hidden');
+            modalNewRound.classList.remove('flex');
+        });
+
+        document.getElementById('btn-confirm-new-round').addEventListener('click', async () => {
+            if (!currentUser || !state.roomCode || !state.roomData) return;
+            if (state.roomData.hostId !== currentUser.uid) return;
+
+            const newMin = parseInt(document.getElementById('modal-min-range').value, 10);
+            const newMax = parseInt(document.getElementById('modal-max-range').value, 10);
+
+            if (isNaN(newMin) || isNaN(newMax) || newMin >= newMax) {
+                showToast('Мінімальне число має бути меншим за максимальне!');
+                return;
+            }
+
+            const btn = document.getElementById('btn-confirm-new-round');
+            btn.disabled = true;
+
+            try {
+                const updates = {
+                    status: 'lobby',
+                    minRange: newMin,
+                    maxRange: newMax,
+                    targetNumber: null,
+                    round: (state.roomData.round || 1) + 1
+                };
+
+                // Обнуляємо вибір усіх гравців у кімнаті
+                const playersObj = state.roomData.players || {};
+                Object.keys(playersObj).forEach(uid => {
+                    updates[`players.${uid}.guess`] = null;
+                });
+
+                document.getElementById('input-my-guess').value = '';
+                await updateDoc(getRoomDocRef(state.roomCode), updates);
+
+                modalNewRound.classList.add('hidden');
+                modalNewRound.classList.remove('flex');
+            } catch (err) {
+                console.error('New round error:', err);
+                showToast('Не вдалося запустити новий раунд.');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Запуск застосунку
+        bootstrapApp();
+    </script>
+</body>
+</html>
