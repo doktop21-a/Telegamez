@@ -1006,7 +1006,7 @@
         // 📤 Відправка запрошення без великого прев'ю-банера
         function shareRoom() {
             if (!currentRoomCode) return;
-            const gameUrl = `https://t.me/HTBGame_bot/game1?startapp=${currentRoomCode}`;
+            const gameUrl = `t.me/HTBGame_bot/game1?startapp=${currentRoomCode}`;
             const shareText = `🎲 Залітай у гру «Хто ближче?»! Кімната: ${currentRoomCode}
 ${gameUrl}`;
             if (tg && tg.openTelegramLink) {
