@@ -1,0 +1,1913 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON STRIKE: GALACTIC VANGUARD</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Orbitron:wght@600;800;900&display=swap');
+
+        :root {
+            --neon-blue: #00f0ff;
+            --neon-pink: #ff0055;
+            --neon-gold: #ffd000;
+            --neon-green: #00ff88;
+            --neon-purple: #b829ff;
+            --bg-dark: #050711;
+            --glass: rgba(11, 15, 30, 0.90);
+            --border: rgba(0, 240, 255, 0.30);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            overflow: hidden;
+            background: var(--bg-dark);
+            font-family: 'Chakra Petch', sans-serif;
+            color: #eef6ff;
+            touch-action: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        canvas#game-canvas {
+            display: block;
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+
+        /* HUD */
+        #hud {
+            position: fixed;
+            top: 10px; left: 10px; right: 10px;
+            z-index: 10;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            gap: 8px;
+        }
+        .hud-box {
+            background: rgba(6, 10, 22, 0.80);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 8px 12px;
+            backdrop-filter: blur(8px);
+        }
+        .hp-wrap {
+            width: 128px;
+            height: 10px;
+            background: rgba(255, 0, 85, 0.22);
+            border: 1px solid var(--neon-pink);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        #hud-hp {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-pink), var(--neon-gold));
+            transition: width 0.15s;
+        }
+        .hud-line {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            color: #9ab5d8;
+            margin-top: 2px;
+        }
+        .hud-line b { color: #fff; }
+
+        /* BOSS HP BAR */
+        #boss-hud {
+            position: fixed;
+            top: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(360px, 88vw);
+            z-index: 10;
+            display: none;
+            text-align: center;
+            pointer-events: none;
+        }
+        .boss-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 0, 85, 0.2);
+            border: 1px solid var(--neon-pink);
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.4);
+        }
+        #boss-hp-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff0055, #ffd000);
+            transition: width 0.1s;
+        }
+
+        /* SCREENS */
+        .screen {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+            background: radial-gradient(circle at 50% 35%, rgba(16, 24, 52, 0.80), rgba(3, 5, 12, 0.96));
+        }
+        .card {
+            width: 100%;
+            max-width: 480px;
+            max-height: 92vh;
+            overflow-y: auto;
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px 16px;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), inset 0 0 24px rgba(0, 240, 255, 0.06);
+            text-align: center;
+        }
+        .badge {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            color: var(--neon-gold);
+            background: rgba(255, 208, 0, 0.1);
+            border: 1px solid rgba(255, 208, 0, 0.35);
+            padding: 4px 12px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 25px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #fff, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+        .sub { font-size: 12px; color: #8ca4c8; letter-spacing: 1.5px; margin-bottom: 12px; }
+
+        .pilot-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 13px 14px;
+            margin: 5px 0;
+            border-radius: 12px;
+            border: 1px solid var(--neon-blue);
+            background: linear-gradient(180deg, rgba(0, 240, 255, 0.14), rgba(0, 240, 255, 0.04));
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-play {
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            border: none;
+            box-shadow: 0 6px 24px rgba(0, 210, 255, 0.35);
+            font-size: 13px;
+        }
+        .btn-coop { border-color: var(--neon-green); background: linear-gradient(180deg, rgba(0, 255, 136, 0.16), rgba(0, 255, 136, 0.04)); color: var(--neon-green); }
+        .btn-shop { border-color: var(--neon-gold); background: linear-gradient(180deg, rgba(255, 208, 0, 0.16), rgba(255, 208, 0, 0.04)); color: var(--neon-gold); }
+        .btn-rank { border-color: var(--neon-purple); background: linear-gradient(180deg, rgba(184, 41, 255, 0.16), rgba(184, 41, 255, 0.04)); color: #df9eff; }
+        .btn-ghost { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.03); color: #9ab3d5; font-size: 11px; padding: 10px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        /* SHOP TABS & SHIP SPRITE PREVIEWS */
+        .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+        .tab-btn {
+            flex: 1; padding: 9px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(0,0,0,0.4); color: #8fa6c9;
+            font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 800; cursor: pointer;
+        }
+        .tab-btn.active { border-color: var(--neon-gold); color: var(--neon-gold); background: rgba(255, 208, 0, 0.12); }
+
+        .scroll-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 48vh;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+        .shop-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(5, 8, 20, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            padding: 10px;
+            text-align: left;
+        }
+        .shop-row.equipped { border-color: var(--neon-blue); background: rgba(0, 240, 255, 0.09); }
+        .ship-preview-canvas {
+            width: 58px;
+            height: 58px;
+            border-radius: 10px;
+            background: radial-gradient(circle, rgba(0, 240, 255, 0.12), rgba(0, 0, 0, 0.6));
+            border: 1px solid rgba(0, 240, 255, 0.22);
+            flex-shrink: 0;
+        }
+        .pill-btn {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--neon-gold);
+            background: rgba(255, 208, 0, 0.12);
+            color: var(--neon-gold);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            font-weight: 800;
+            cursor: pointer;
+            min-width: 74px;
+            flex-shrink: 0;
+        }
+        .pill-btn.eq { border-color: var(--neon-blue); color: var(--neon-blue); background: rgba(0, 240, 255, 0.12); }
+        .pill-btn:disabled { border-color: #334; color: #556; background: transparent; cursor: not-allowed; }
+
+        /* CO-OP LOBBY */
+        .code-box {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: 6px;
+            color: var(--neon-green);
+            background: rgba(0, 255, 136, 0.08);
+            border: 1px dashed var(--neon-green);
+            border-radius: 12px;
+            padding: 10px;
+            margin: 8px 0;
+        }
+        .code-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+            outline: none;
+        }
+        .slot-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 7px 11px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        .toast { font-size: 12px; color: var(--neon-green); min-height: 18px; margin-top: 6px; }
+        .dev-link { color: var(--neon-blue); font-family: 'Orbitron', sans-serif; font-weight: 800; text-decoration: none; border-bottom: 1px dashed var(--neon-blue); }
+    </style>
+</head>
+<body>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-box">
+            <div class="hp-wrap"><div id="hud-hp"></div></div>
+            <div class="hud-line">SCORE: <b id="hud-score">0</b> • <span style="color:var(--neon-gold)" id="hud-coins">0</span> 💎</div>
+            <div class="hud-line" id="hud-weapon" style="color:var(--neon-blue);font-size:10px;">🔫 PLASMA LVL 1</div>
+            <div class="hud-line" id="hud-dir" style="color:var(--neon-green);font-size:9px;">🧭 ВЕКТОР: ПІВНІЧ ↑</div>
+        </div>
+        <div class="hud-box" id="hud-coop" style="display:none; text-align:right; border-color:rgba(0,255,136,0.4);">
+            <div style="font-family:Orbitron;font-size:10px;color:var(--neon-green);font-weight:800;" id="hud-coop-title">SYNC CO-OP (1/5)</div>
+            <div id="hud-coop-list" style="font-size:11px;color:#cde;margin-top:2px;"></div>
+        </div>
+    </div>
+
+    <!-- BOSS HP BAR -->
+    <div id="boss-hud">
+        <div id="boss-name" style="font-family:Orbitron;font-size:11px;font-weight:900;color:var(--neon-pink);margin-bottom:3px;letter-spacing:1.5px;">BOSS</div>
+        <div class="boss-bar-bg"><div id="boss-hp-fill"></div></div>
+    </div>
+
+    <!-- 1. MAIN MENU -->
+    <div id="scr-menu" class="screen">
+        <div class="card">
+            <div class="badge">SYNC CO-OP • MULTI-VECTOR</div>
+            <h1>NEON STRIKE</h1>
+            <div class="sub">GALACTIC VANGUARD EDITION</div>
+
+            <div class="pilot-bar">
+                <span style="color:var(--neon-green);font-weight:700;">🟢 <span id="ui-pilot">ПІЛОТ</span></span>
+                <span style="font-family:Orbitron;color:var(--neon-gold);font-weight:800;"><span id="ui-bank">0</span> 💎 • 🏆 <span id="ui-best">0</span></span>
+            </div>
+
+            <button class="btn btn-play" onclick="Game.startSolo()">🚀 ПОЧАТИ МІСІЮ (SOLO)</button>
+            <button class="btn btn-coop" onclick="Coop.openLobby()">👥 СИНХРОННИЙ КООПЕРАТИВ (ДО 5)</button>
+
+            <div class="grid-2">
+                <button class="btn btn-shop" onclick="UI.openShop('hulls')">🛸 АНГАР ТА ЗБРОЯ</button>
+                <button class="btn btn-rank" onclick="UI.openLeaderboard()">🏆 ЗАЛ СЛАВИ</button>
+            </div>
+
+            <div class="grid-2">
+                <button class="btn btn-ghost" onclick="UI.show('scr-guide')">📖 ЯК ГРАТИ</button>
+                <button class="btn btn-ghost" style="border-color:var(--border);color:var(--neon-blue);" onclick="UI.show('scr-dev')">👨‍💻 ПРО РОЗРОБНИКА</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. CO-OP LOBBY -->
+    <div id="scr-coop" class="screen" style="display:none;">
+        <div class="card">
+            <div class="badge" style="color:var(--neon-green);border-color:var(--neon-green);">SYNCHRONIZED WORLD CO-OP</div>
+            <h1 style="font-size:21px;">КООПЕРАТИВНА ЕСКАДРА</h1>
+            <div class="sub">ЄДИНИЙ СВІТ, СПІЛЬНІ ВОРОГИ ТА БОСИ (+25% 💎)</div>
+
+            <div id="coop-setup">
+                <button class="btn btn-coop" onclick="Coop.createRoom()">➕ СТВОРИТИ КІМНАТУ</button>
+                <div style="margin:10px 0;font-size:11px;color:#789;">— АБО ВВЕДИ КОД КІМНАТИ —</div>
+                <input type="text" id="coop-input-code" class="code-input" maxlength="4" placeholder="0000" inputmode="numeric">
+                <button class="btn" onclick="Coop.joinRoomByInput()">🔗 ПРИЄДНАТИСЬ</button>
+            </div>
+
+            <div id="coop-waiting" style="display:none;">
+                <div style="font-size:11px;color:#9ab;">КОД КІМНАТИ (<span id="coop-count">1</span>/5):</div>
+                <div class="code-box" id="coop-room-code">----</div>
+                <div id="coop-slots" style="margin-bottom:10px;"></div>
+
+                <div class="grid-2">
+                    <button class="btn btn-coop" onclick="Coop.inviteFriend()">📨 В ТЕЛЕГРАМ</button>
+                    <button class="btn" onclick="Coop.copyInviteLink()">📋 ЛІНК</button>
+                </div>
+                <button class="btn btn-play" id="btn-coop-start" style="display:none;margin-top:6px;" onclick="Coop.hostStart()">🚀 СТАРТ ЕСКАДРИ</button>
+                <div id="coop-wait-hint" style="font-size:11px;color:#8ca4c8;margin-top:6px;display:none;">Очікуємо запуск від хоста кімнати...</div>
+            </div>
+
+            <div class="toast" id="coop-toast"></div>
+            <button class="btn btn-ghost" style="margin-top:8px;" onclick="Coop.leaveRoom()">← В МЕНЮ</button>
+        </div>
+    </div>
+
+    <!-- 3. SHOP (SHIPS WITH LIVE SPRITES + WEAPONS + UPGRADES) -->
+    <div id="scr-shop" class="screen" style="display:none;">
+        <div class="card">
+            <h1 style="font-size:23px;">АНГАР ТА ОЗБРОЄННЯ</h1>
+            <div class="pilot-bar" style="margin-top:8px;">
+                <span>БАЛАНС:</span>
+                <span style="font-family:Orbitron;color:var(--neon-gold);font-weight:800;"><span id="shop-bank">0</span> 💎</span>
+            </div>
+            <div class="tabs">
+                <button class="tab-btn active" id="tab-hulls" onclick="UI.openShop('hulls')">🛸 КОРПУСИ</button>
+                <button class="tab-btn" id="tab-weapons" onclick="UI.openShop('weapons')">🔫 ЗБРОЯ</button>
+                <button class="tab-btn" id="tab-upgrades" onclick="UI.openShop('upgrades')">⚡ АПГРЕЙДИ</button>
+            </div>
+            <div class="scroll-list" id="shop-list"></div>
+            <button class="btn btn-ghost" onclick="UI.show('scr-menu')">← В МЕНЮ</button>
+        </div>
+    </div>
+
+    <!-- 4. LEADERBOARD -->
+    <div id="scr-rank" class="screen" style="display:none;">
+        <div class="card">
+            <h1 style="font-size:23px;">ЗАЛ СЛАВИ</h1>
+            <div class="sub" id="rank-status">ЗАВАНТАЖЕННЯ...</div>
+            <div class="scroll-list" id="rank-list"></div>
+            <button class="btn btn-ghost" onclick="UI.show('scr-menu')">← НАЗАД</button>
+        </div>
+    </div>
+
+    <!-- 5. GUIDE -->
+    <div id="scr-guide" class="screen" style="display:none;">
+        <div class="card">
+            <h1 style="font-size:22px;">ПРАВИЛА ПОЛЬОТУ</h1>
+            <div style="text-align:left;font-size:13px;line-height:1.55;color:#bfd2ee;margin:10px 0;">
+                <p><b>🧭 ЗМІНА ВЕКТОРА ПОЛЬОТУ (кожні 2000 очок):</b> Космос динамічний! Кожні 2000 очок камера та корабель розвертаються на 90° (Північ ↑ → Схід → Південь ↓ → Захід ←), змінюючи напрямок атаки ворогів!</p><br>
+                <p><b>👥 СИНХРОННИЙ КООПЕРАТИВ:</b> Усі гравці в кімнаті летять в <b>одному спільному світі</b>, бачать кораблі та постріли один одного і разом б'ють спільних босів та їхніх прислужників.</p><br>
+                <p><b>🔫 5 ВИДІВ ЗБРОЇ ТА БОСИ:</b> Обирай у ангарі або підбирай у бою: <b>Плазма, Лазерний промінь, Самонавідні ракети, Тесла-розрядник</b> або <b>Хвильовий дробовик</b>.</p>
+            </div>
+            <button class="btn btn-play" onclick="UI.show('scr-menu')">ЗРОЗУМІЛО!</button>
+        </div>
+    </div>
+
+    <!-- 6. ABOUT DEVELOPER -->
+    <div id="scr-dev" class="screen" style="display:none;">
+        <div class="card">
+            <div class="badge">DEVELOPER INFO</div>
+            <h1 style="font-size:23px;">ПРО РОЗРОБНИКА</h1>
+            <div class="sub">NEON STRIKE: GALACTIC VANGUARD</div>
+            <div style="background:rgba(0,0,0,0.45);border:1px solid var(--border);border-radius:14px;padding:14px;margin:12px 0;text-align:left;line-height:1.7;font-size:14px;">
+                <p style="margin-bottom:8px;">Дякуємо за гру в <b>NEON STRIKE</b>! Маєш ідеї щодо нових босів чи зброї? Пиши напряму:</p>
+                <p>📧 <b>Email:</b> <a href="mailto:doktop21@gmail.com" class="dev-link">doktop21@gmail.com</a></p>
+                <p>✈️ <b>Telegram:</b> <a href="https://t.me/doodle244" target="_blank" class="dev-link" onclick="UI.openDevTg(event)">@doodle244</a></p>
+            </div>
+            <button class="btn btn-coop" onclick="UI.openDevTg()">💬 НАПИСАТИ В TELEGRAM (@doodle244)</button>
+            <button class="btn btn-ghost" onclick="UI.show('scr-menu')">← НАЗАД</button>
+        </div>
+    </div>
+
+    <!-- 7. GAME OVER -->
+    <div id="scr-over" class="screen" style="display:none;">
+        <div class="card">
+            <div class="badge" style="color:var(--neon-pink);border-color:var(--neon-pink);">MISSION REPORT</div>
+            <h1 style="font-size:25px;background:linear-gradient(90deg,var(--neon-pink),var(--neon-gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">КОРАБЕЛЬ ЗНИЩЕНО</h1>
+            <div class="pilot-bar" style="flex-direction:column;gap:6px;margin-top:12px;">
+                <div style="font-size:16px;">РАХУНОК: <b style="color:var(--neon-blue);font-family:Orbitron;" id="over-score">0</b></div>
+                <div style="font-size:13px;color:var(--neon-green);">РЕКОРД: <b id="over-best">0</b></div>
+                <div style="font-size:15px;color:var(--neon-gold);">НАГОРОДА: <b id="over-coins">+0</b> 💎</div>
+            </div>
+            <button class="btn btn-coop" onclick="Game.shareResult()">📨 ПОДІЛИТИСЬ РЕЗУЛЬТАТОМ В ГРУ</button>
+            <button class="btn btn-play" onclick="Game.restart()">🔄 НОВИЙ ВИЛІТ</button>
+            <div class="grid-2">
+                <button class="btn btn-shop" onclick="UI.openShop('hulls')">🛸 АНГАР</button>
+                <button class="btn btn-rank" onclick="UI.openLeaderboard()">🏆 ТОП</button>
+            </div>
+            <button class="btn btn-ghost" onclick="UI.show('scr-menu')">ГОЛОВНЕ МЕНЮ</button>
+            <div class="toast" id="over-toast"></div>
+        </div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+<script>
+// ============================================================================
+// 1. TELEGRAM MINI APP & CLEAN DEEP-LINK
+// ============================================================================
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const BOT_APP_URL = "https://t.me/HTBGame_bot/game2";
+
+let Pilot = {
+    id: 'guest_' + (localStorage.getItem('ns6_gid') || Math.random().toString(36).slice(2, 9)),
+    name: 'Пілот'
+};
+localStorage.setItem('ns6_gid', Pilot.id.replace('guest_', ''));
+
+let startParamRoom = null;
+if (tg) {
+    tg.ready();
+    tg.expand();
+    if (tg.setHeaderColor) tg.setHeaderColor('#050711');
+    if (tg.setBackgroundColor) tg.setBackgroundColor('#050711');
+    if (tg.initDataUnsafe) {
+        if (tg.initDataUnsafe.user) {
+            const u = tg.initDataUnsafe.user;
+            Pilot.id = 'tg_' + u.id;
+            Pilot.name = [u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'Пілот';
+        }
+        if (tg.initDataUnsafe.start_param) {
+            startParamRoom = String(tg.initDataUnsafe.start_param).replace('room_', '').trim();
+        }
+    }
+}
+const urlParams = new URLSearchParams(window.location.search);
+if (!startParamRoom && (urlParams.get('startapp') || urlParams.get('room'))) {
+    startParamRoom = String(urlParams.get('startapp') || urlParams.get('room')).replace('room_', '').trim();
+}
+document.getElementById('ui-pilot').innerText = Pilot.name.toUpperCase();
+
+// ============================================================================
+// 2. FIREBASE REALTIME DATABASE
+// ============================================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyDJqPE_fhKesMuu37eIGw83C0SeATN1JJA",
+    authDomain: "htobilshegame.firebaseapp.com",
+    databaseURL: "https://htobilshegame-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "htobilshegame",
+    storageBucket: "htobilshegame.firebasestorage.app",
+    messagingSenderId: "974267595254",
+    appId: "1:974267595254:web:fb27477ffe591d57736fd7"
+};
+
+let db = null;
+try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+} catch (e) {}
+
+// ============================================================================
+// 3. SHIPS (HULLS) & WEAPONS CATALOG + PERSISTENT SAVE
+// ============================================================================
+const HULLS = {
+    viper: {
+        id: 'viper', name: 'VIPER MK-I', price: 0,
+        c1: '#00f0ff', c2: '#0055ff', hp: 100, speedMult: 1.0,
+        desc: 'Маневрений винищувач перехоплення. Збалансовані показники.'
+    },
+    spectre: {
+        id: 'spectre', name: 'SPECTRE STEALTH', price: 600,
+        c1: '#b829ff', c2: '#ff0055', hp: 115, speedMult: 1.15,
+        desc: 'Стелс-крило зі зворотною стріловидністю та швидкими маневрами.'
+    },
+    titan: {
+        id: 'titan', name: 'TITAN DREADNOUGHT', price: 1400,
+        c1: '#ffd000', c2: '#ff5500', hp: 185, speedMult: 0.92,
+        desc: 'Важкий дредноут з потрійним бронюванням та високим запасом HP.'
+    },
+    valkyrie: {
+        id: 'valkyrie', name: 'VALKYRIE PRIME', price: 2600,
+        c1: '#00ff88', c2: '#00f0ff', hp: 155, speedMult: 1.12,
+        desc: 'Елітний флагман: авто-регенерація щита +25% бонус до кристалів 💎.'
+    }
+};
+
+const WEAPONS = {
+    plasma: {
+        id: 'plasma', name: 'PLASMA PULSE (ПЛАЗМА)', price: 0, color: '#00f0ff',
+        desc: 'Класичні швидкісні плазмові імпульси з високою точністю.'
+    },
+    spread: {
+        id: 'spread', name: 'NOVA SCATTER (ДРОБОВИК)', price: 450, color: '#ffd000',
+        desc: 'Широкий віяловий залп з 5 енергетичних зарядів на ближній дистанції.'
+    },
+    laser: {
+        id: 'laser', name: 'HYPER LASER (ПРОМІНЬ)', price: 850, color: '#ff0055',
+        desc: 'Надшвидкі пробивні промені, що прошивають ворогів наскрізь.'
+    },
+    missiles: {
+        id: 'missiles', name: 'SEEKER SWARM (РАКЕТИ)', price: 1300, color: '#00ff88',
+        desc: 'Випускає самонавідні мікро-ракети, що самі знаходять ціль.'
+    },
+    tesla: {
+        id: 'tesla', name: 'TESLA ARC (БЛИСКАВКА)', price: 1900, color: '#b829ff',
+        desc: 'Електричні дуги, що перестрибують між сусідніми ворогами.'
+    }
+};
+
+const Save = {
+    data: {
+        coins: 0,
+        bestScore: 0,
+        equippedHull: 'viper',
+        unlockedHulls: ['viper'],
+        equippedWeapon: 'plasma',
+        unlockedWeapons: ['plasma'],
+        dmgLvl: 1,
+        rateLvl: 1,
+        hpLvl: 1
+    },
+    init() {
+        try {
+            const p = JSON.parse(localStorage.getItem('neon_vanguard_v6'));
+            if (p) this.data = { ...this.data, ...p };
+        } catch (e) {}
+        this.persist();
+    },
+    persist() {
+        this.data.coins = Math.max(0, Math.floor(Number(this.data.coins) || 0));
+        this.data.bestScore = Math.max(0, Math.floor(Number(this.data.bestScore) || 0));
+        localStorage.setItem('neon_vanguard_v6', JSON.stringify(this.data));
+        UI.refreshTop();
+
+        if (!db) return;
+        db.ref('neon_vanguard_v6/leaderboard/' + Pilot.id).update({
+            name: String(Pilot.name || 'Пілот'),
+            bestScore: this.data.bestScore,
+            hull: this.data.equippedHull,
+            updatedAt: Date.now()
+        }).catch(() => {});
+    }
+};
+
+// ============================================================================
+// 4. DEDICATED SHIP SPRITE RENDERER (USED IN BOTH SHOP & GAME CANVAS!)
+// ============================================================================
+function drawShipSprite(ctx, hullId, x, y, scale = 1, angleRad = 0, thrust = true, alpha = 1) {
+    const h = HULLS[hullId] || HULLS.viper;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angleRad);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = alpha;
+
+    // Реактивний шлейф двигунів
+    if (thrust) {
+        const flicker = 14 + Math.random() * 10;
+        ctx.fillStyle = h.c1;
+        ctx.beginPath();
+        ctx.moveTo(-8, 16);
+        ctx.lineTo(-4, 16 + flicker);
+        ctx.lineTo(0, 16);
+        ctx.moveTo(0, 16);
+        ctx.lineTo(4, 16 + flicker);
+        ctx.lineTo(8, 16);
+        ctx.fill();
+    }
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = h.c1;
+    ctx.fillStyle = '#090e22';
+
+    if (hullId === 'viper') {
+        // Класичний гострий перехоплювач
+        ctx.beginPath();
+        ctx.moveTo(0, -24);
+        ctx.lineTo(20, 14);
+        ctx.lineTo(8, 18);
+        ctx.lineTo(0, 12);
+        ctx.lineTo(-8, 18);
+        ctx.lineTo(-20, 14);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // Крила та гармати
+        ctx.fillStyle = h.c2;
+        ctx.fillRect(-15, 2, 4, 12);
+        ctx.fillRect(11, 2, 4, 12);
+    } else if (hullId === 'spectre') {
+        // Стелс-винищувач зі зворотною стріловидністю
+        ctx.beginPath();
+        ctx.moveTo(0, -26);
+        ctx.lineTo(10, -4);
+        ctx.lineTo(24, -10);
+        ctx.lineTo(16, 18);
+        ctx.lineTo(0, 11);
+        ctx.lineTo(-16, 18);
+        ctx.lineTo(-24, -10);
+        ctx.lineTo(-10, -4);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        ctx.strokeStyle = h.c2;
+        ctx.beginPath();
+        ctx.moveTo(-14, 10); ctx.lineTo(0, -10); ctx.lineTo(14, 10);
+        ctx.stroke();
+    } else if (hullId === 'titan') {
+        // Важкий дредноут з подвійним носом
+        ctx.beginPath();
+        ctx.moveTo(-8, -22);
+        ctx.lineTo(8, -22);
+        ctx.lineTo(24, -2);
+        ctx.lineTo(22, 18);
+        ctx.lineTo(-22, 18);
+        ctx.lineTo(-24, -2);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = h.c2;
+        ctx.fillRect(-18, -12, 6, 24);
+        ctx.fillRect(12, -12, 6, 24);
+    } else if (hullId === 'valkyrie') {
+        // Флагман з подвійними енерго-крилами
+        ctx.beginPath();
+        ctx.moveTo(0, -28);
+        ctx.lineTo(9, -6);
+        ctx.lineTo(26, 6);
+        ctx.lineTo(18, 20);
+        ctx.lineTo(7, 13);
+        ctx.lineTo(0, 21);
+        ctx.lineTo(-7, 13);
+        ctx.lineTo(-18, 20);
+        ctx.lineTo(-26, 6);
+        ctx.lineTo(-9, -6);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        ctx.strokeStyle = h.c2;
+        ctx.beginPath(); ctx.arc(0, 2, 11, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // Неонова кабіна пілота
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(0, -3, 3.5, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// ============================================================================
+// 5. SYNTHWAVE AUDIO ENGINE
+// ============================================================================
+const Sound = {
+    ctx: null, ready: false, step: 0, nextTime: 0,
+    bass: [45, 45, 57, 45, 48, 48, 60, 48, 41, 41, 53, 41, 43, 43, 55, 47],
+    init() {
+        try {
+            if (!this.ctx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (AC) { this.ctx = new AC(); this.ready = true; this.nextTime = this.ctx.currentTime + 0.05; }
+            }
+            if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+        } catch (e) {}
+    },
+    tone(f, type, dur, vol, slide = null, delay = 0) {
+        if (!this.ready || !this.ctx || !f) return;
+        try {
+            const t = this.ctx.currentTime + delay;
+            const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+            o.type = type; o.frequency.setValueAtTime(f, t);
+            if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), t + dur);
+            g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+            o.connect(g); g.connect(this.ctx.destination);
+            o.start(t); o.stop(t + dur);
+        } catch (e) {}
+    },
+    fx(type) {
+        if (type === 'shoot') this.tone(860, 'sawtooth', 0.06, 0.03, 260);
+        else if (type === 'boom') this.tone(130, 'sawtooth', 0.24, 0.14, 32);
+        else if (type === 'coin') { this.tone(1150, 'sine', 0.08, 0.08, 1750); this.tone(1750, 'sine', 0.1, 0.06, 2300, 0.04); }
+        else if (type === 'rotate') { this.tone(330, 'triangle', 0.25, 0.12, 880); }
+    },
+    tick() {
+        if (!this.ready || !this.ctx) return;
+        if (this.nextTime < this.ctx.currentTime) this.nextTime = this.ctx.currentTime;
+        while (this.nextTime < this.ctx.currentTime + 0.12) {
+            const m = this.bass[this.step % 16];
+            this.tone(440 * Math.pow(2, (m - 69) / 12), 'sawtooth', 0.11, 0.05);
+            if (this.step % 4 === 0) this.tone(95, 'sine', 0.15, 0.14, 28);
+            this.step++;
+            this.nextTime += (60 / 132) * 0.25;
+        }
+    }
+};
+
+// ============================================================================
+// 6. SYNCHRONIZED MULTIPLAYER (SHARED ENEMIES, BOSSES, PROJECTILES & SEED!)
+// ============================================================================
+const Coop = {
+    MAX: 5,
+    active: false,
+    roomCode: null,
+    isHost: false,
+    roomRef: null,
+    players: {},
+    sharedWorld: null, // Синхронізований стан світу від хоста
+    syncTick: 0,
+
+    openLobby() {
+        Sound.init();
+        UI.show('scr-coop');
+        document.getElementById('coop-setup').style.display = 'block';
+        document.getElementById('coop-waiting').style.display = 'none';
+        document.getElementById('coop-toast').innerText = '';
+    },
+
+    createRoom() {
+        if (!db) { document.getElementById('coop-toast').innerText = '⚠️ Помилка Firebase'; return; }
+        const code = Math.floor(1000 + Math.random() * 9000).toString();
+        this.roomCode = code;
+        this.isHost = true;
+        this.active = true;
+        this.players = {};
+
+        this.roomRef = db.ref('neon_vanguard_v6/rooms/' + code);
+        this.roomRef.set({
+            status: 'waiting',
+            hostId: Pilot.id,
+            players: {
+                [Pilot.id]: {
+                    id: Pilot.id, name: Pilot.name,
+                    nx: 0.5, ny: 0.82, hp: 100, alive: true,
+                    hull: Save.data.equippedHull, weapon: Save.data.equippedWeapon,
+                    isHost: true, joinedAt: Date.now()
+                }
+            }
+        }).then(() => {
+            this.roomRef.child('players/' + Pilot.id).onDisconnect().remove();
+            this.showWaitingUI();
+            this.listenRoom();
+        });
+    },
+
+    joinRoomByInput() {
+        const code = document.getElementById('coop-input-code').value.trim();
+        if (code.length !== 4) { document.getElementById('coop-toast').innerText = 'Введіть 4 цифри коду!'; return; }
+        this.joinRoom(code);
+    },
+
+    joinRoom(code) {
+        if (!db) return;
+        const ref = db.ref('neon_vanguard_v6/rooms/' + code);
+        ref.once('value').then(snap => {
+            const room = snap.val();
+            if (!room) { document.getElementById('coop-toast').innerText = '❌ Кімнату ' + code + ' не знайдено!'; return; }
+            const existing = room.players || {};
+            if (!existing[Pilot.id] && Object.keys(existing).length >= this.MAX) {
+                document.getElementById('coop-toast').innerText = '⚠️ Кімната заповнена (5/5)!'; return;
+            }
+            this.roomCode = code;
+            this.isHost = (room.hostId === Pilot.id);
+            this.active = true;
+            this.roomRef = ref;
+
+            ref.child('players/' + Pilot.id).set({
+                id: Pilot.id, name: Pilot.name,
+                nx: 0.5, ny: 0.82, hp: 100, alive: true,
+                hull: Save.data.equippedHull, weapon: Save.data.equippedWeapon,
+                isHost: this.isHost, joinedAt: Date.now()
+            }).then(() => {
+                ref.child('players/' + Pilot.id).onDisconnect().remove();
+                this.showWaitingUI();
+                this.listenRoom();
+            });
+        });
+    },
+
+    showWaitingUI() {
+        document.getElementById('coop-setup').style.display = 'none';
+        document.getElementById('coop-waiting').style.display = 'block';
+        document.getElementById('coop-room-code').innerText = this.roomCode;
+        document.getElementById('btn-coop-start').style.display = this.isHost ? 'flex' : 'none';
+        document.getElementById('coop-wait-hint').style.display = this.isHost ? 'none' : 'block';
+    },
+
+    listenRoom() {
+        if (!this.roomRef) return;
+        this.roomRef.on('value', snap => {
+            const room = snap.val();
+            if (!room) return;
+            this.players = room.players || {};
+            this.isHost = (room.hostId === Pilot.id);
+            this.sharedWorld = room.worldState || null;
+
+            const list = Object.values(this.players).sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+            document.getElementById('coop-count').innerText = list.length;
+
+            let html = '';
+            for (let i = 0; i < this.MAX; i++) {
+                const p = list[i];
+                if (p) {
+                    html += `<div class="slot-row" style="border-color:rgba(0,255,136,0.35);">
+                        <span><b>${p.isHost ? '👑' : '🚀'} ${p.name}</b> (${(HULLS[p.hull]?.name || 'VIPER').split(' ')[0]})</span>
+                        <span style="color:var(--neon-green)">В ЕСКАДРІ</span>
+                    </div>`;
+                } else {
+                    html += `<div class="slot-row" style="opacity:0.4;"><span>Слот #${i + 1}</span><span>ВІЛЬНО</span></div>`;
+                }
+            }
+            document.getElementById('coop-slots').innerHTML = html;
+
+            document.getElementById('hud-coop-title').innerText = `SYNC SQUAD (${list.length}/5) • x${this.getBonus().toFixed(2)} 💎`;
+            document.getElementById('hud-coop-list').innerHTML = list.map(p =>
+                `<div>${p.name}: <b>${p.alive ? Math.round(p.hp) + ' HP' : '💀'}</b></div>`
+            ).join('');
+
+            if (room.status === 'playing' && !Game.running && document.getElementById('scr-coop').style.display !== 'none') {
+                Game.startCoop();
+            }
+        });
+    },
+
+    getBonus() {
+        return 1 + (Math.max(1, Object.keys(this.players).length) - 1) * 0.25;
+    },
+
+    hostStart() {
+        if (this.roomRef && this.isHost) {
+            this.roomRef.update({ status: 'playing', worldState: null });
+        }
+    },
+
+    // Синхронізація гравця (нормалізовані координати 0..1 для однакового масштабу на будь-якому екрані!)
+    pushPlayerState(nx, ny, hp, alive, shooting) {
+        if (!this.active || !this.roomRef) return;
+        this.roomRef.child('players/' + Pilot.id).update({
+            nx: Number(nx.toFixed(3)),
+            ny: Number(ny.toFixed(3)),
+            hp: Math.max(0, Math.round(hp)),
+            alive: Boolean(alive),
+            shooting: Boolean(shooting),
+            hull: Save.data.equippedHull,
+            weapon: Save.data.equippedWeapon
+        }).catch(() => {});
+    },
+
+    // Хост транслює єдиний стан світу (рахунок, вектор польоту, вороги, бос) усім клієнтам!
+    pushHostWorld(state) {
+        if (!this.active || !this.isHost || !this.roomRef) return;
+        this.roomRef.child('worldState').set(state).catch(() => {});
+    },
+
+    // Клієнт передає хосту нанесену шкоду по ворогу або босу
+    sendClientHit(targetType, targetId, dmg) {
+        if (!this.active || this.isHost || !this.roomRef) return;
+        this.roomRef.child('hits').push({ targetType, targetId, dmg: Math.round(dmg), at: Date.now() }).catch(() => {});
+    },
+
+    inviteFriend() {
+        const link = `${BOT_APP_URL}?startapp=${this.roomCode}`;
+        const text = `🚀 Залітай у синхронний кооператив NEON STRIKE! Кімната: ${this.roomCode}`;
+        const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
+        if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+        else this.copyInviteLink();
+    },
+
+    copyInviteLink() {
+        const link = `${BOT_APP_URL}?startapp=${this.roomCode}`;
+        const full = `🚀 Залітай у синхронний кооператив NEON STRIKE! Кімната: ${this.roomCode}
+${link}`;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(full);
+            document.getElementById('coop-toast').innerText = '✅ Запрошення скопійовано!';
+        }
+    },
+
+    leaveRoom() {
+        if (this.roomRef) {
+            this.roomRef.off();
+            this.roomRef.child('players/' + Pilot.id).remove().catch(() => {});
+        }
+        this.active = false;
+        this.roomCode = null;
+        UI.show('scr-menu');
+    }
+};
+
+// ============================================================================
+// 7. UI CONTROLLER & SHOP WITH SHIP SPRITES
+// ============================================================================
+const UI = {
+    show(id) {
+        document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+        if (id) document.getElementById(id).style.display = 'flex';
+        this.refreshTop();
+    },
+    refreshTop() {
+        document.getElementById('ui-bank').innerText = Save.data.coins;
+        document.getElementById('ui-best').innerText = Save.data.bestScore;
+        document.getElementById('shop-bank').innerText = Save.data.coins;
+    },
+    openDevTg(e) {
+        if (e) e.preventDefault();
+        if (tg && tg.openTelegramLink) tg.openTelegramLink('https://t.me/doodle244');
+        else window.open('https://t.me/doodle244', '_blank');
+    },
+    openShop(tab = 'hulls') {
+        Sound.init();
+        this.show('scr-shop');
+        ['hulls', 'weapons', 'upgrades'].forEach(t => {
+            document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+        });
+        const list = document.getElementById('shop-list');
+        list.innerHTML = '';
+
+        if (tab === 'hulls') {
+            Object.values(HULLS).forEach(h => {
+                const owned = Save.data.unlockedHulls.includes(h.id);
+                const eq = Save.data.equippedHull === h.id;
+                let btn = eq ? `<button class="pill-btn eq" disabled>ОБРАНО</button>`
+                    : (owned ? `<button class="pill-btn eq" onclick="UI.equipHull('${h.id}')">ОБРАТИ</button>`
+                    : `<button class="pill-btn" ${Save.data.coins < h.price ? 'disabled' : ''} onclick="UI.buyHull('${h.id}')">${h.price} 💎</button>`);
+
+                list.innerHTML += `
+                    <div class="shop-row ${eq ? 'equipped' : ''}">
+                        <canvas class="ship-preview-canvas" id="prev-${h.id}" width="58" height="58"></canvas>
+                        <div style="flex:1;">
+                            <div style="font-family:Orbitron;font-size:12px;font-weight:800;color:${h.c1}">${h.name}</div>
+                            <div style="font-size:11px;color:#9ab5d8;margin-top:2px;">HP: <b>${h.hp}</b> • Швидкість: <b>x${h.speedMult}</b></div>
+                            <div style="font-size:11px;color:#7f96b8;margin-top:2px;">${h.desc}</div>
+                        </div>
+                        ${btn}
+                    </div>`;
+            });
+
+            // Малюємо живий спрайт кожного корабля прямо в картці магазину!
+            requestAnimationFrame(() => {
+                Object.values(HULLS).forEach(h => {
+                    const c = document.getElementById('prev-' + h.id);
+                    if (c) {
+                        const pctx = c.getContext('2d');
+                        pctx.clearRect(0, 0, 58, 58);
+                        drawShipSprite(pctx, h.id, 29, 27, 0.95, 0, true, 1);
+                    }
+                });
+            });
+        } else if (tab === 'weapons') {
+            Object.values(WEAPONS).forEach(w => {
+                const owned = Save.data.unlockedWeapons.includes(w.id);
+                const eq = Save.data.equippedWeapon === w.id;
+                let btn = eq ? `<button class="pill-btn eq" disabled>АКТИВНА</button>`
+                    : (owned ? `<button class="pill-btn eq" onclick="UI.equipWeapon('${w.id}')">ОБРАТИ</button>`
+                    : `<button class="pill-btn" ${Save.data.coins < w.price ? 'disabled' : ''} onclick="UI.buyWeapon('${w.id}')">${w.price} 💎</button>`);
+
+                list.innerHTML += `
+                    <div class="shop-row ${eq ? 'equipped' : ''}">
+                        <div class="ship-preview-canvas" style="display:flex;align-items:center;justify-content:center;font-size:24px;border-color:${w.color};">🔫</div>
+                        <div style="flex:1;">
+                            <div style="font-family:Orbitron;font-size:12px;font-weight:800;color:${w.color}">${w.name}</div>
+                            <div style="font-size:11px;color:#8ca4c8;margin-top:3px;">${w.desc}</div>
+                        </div>
+                        ${btn}
+                    </div>`;
+            });
+        } else {
+            const upgs = [
+                { key: 'dmgLvl', name: 'ПЛАЗМОВІ ПРИСКОРЮВАЧІ', desc: '+18% шкоди для будь-якої зброї.', cost: Save.data.dmgLvl * 160 },
+                { key: 'rateLvl', name: 'СИСТЕМА ОХОЛОДЖЕННЯ', desc: '+12% скорострільності.', cost: Save.data.rateLvl * 180 },
+                { key: 'hpLvl', name: 'ТИТАНОВИЙ КАРКАС', desc: '+25 максимального HP корпусу.', cost: Save.data.hpLvl * 150 }
+            ];
+            upgs.forEach(u => {
+                list.innerHTML += `
+                    <div class="shop-row">
+                        <div style="flex:1;">
+                            <div style="font-family:Orbitron;font-size:12px;font-weight:800;">${u.name} <span style="color:var(--neon-gold)">LVL ${Save.data[u.key]}</span></div>
+                            <div style="font-size:11px;color:#8ca4c8;margin-top:2px;">${u.desc}</div>
+                        </div>
+                        <button class="pill-btn" ${Save.data.coins < u.cost ? 'disabled' : ''} onclick="UI.buyUpg('${u.key}', ${u.cost})">${u.cost} 💎</button>
+                    </div>`;
+            });
+        }
+    },
+    buyHull(id) {
+        const h = HULLS[id];
+        if (Save.data.coins >= h.price) {
+            Save.data.coins -= h.price; Save.data.unlockedHulls.push(id); Save.data.equippedHull = id;
+            Save.persist(); Sound.fx('coin'); this.openShop('hulls');
+        }
+    },
+    equipHull(id) { Save.data.equippedHull = id; Save.persist(); Sound.fx('coin'); this.openShop('hulls'); },
+    buyWeapon(id) {
+        const w = WEAPONS[id];
+        if (Save.data.coins >= w.price) {
+            Save.data.coins -= w.price; Save.data.unlockedWeapons.push(id); Save.data.equippedWeapon = id;
+            Save.persist(); Sound.fx('coin'); this.openShop('weapons');
+        }
+    },
+    equipWeapon(id) { Save.data.equippedWeapon = id; Save.persist(); Sound.fx('coin'); this.openShop('weapons'); },
+    buyUpg(key, cost) {
+        if (Save.data.coins >= cost) { Save.data.coins -= cost; Save.data[key]++; Save.persist(); Sound.fx('coin'); this.openShop('upgrades'); }
+    },
+    openLeaderboard() {
+        this.show('scr-rank');
+        const list = document.getElementById('rank-list');
+        const st = document.getElementById('rank-status');
+        Save.persist();
+        if (!db) { st.innerText = 'ОФЛАЙН • ВАШ РЕКОРД: ' + Save.data.bestScore; return; }
+        st.innerText = 'ЗАВАНТАЖЕННЯ ТОП-30...';
+        db.ref('neon_vanguard_v6/leaderboard').once('value').then(snap => {
+            const arr = [];
+            snap.forEach(c => { const v = c.val(); if (v) arr.push({ id: c.key, name: v.name || 'Пілот', bestScore: Number(v.bestScore) || 0 }); });
+            arr.sort((a, b) => b.bestScore - a.bestScore);
+            const top = arr.slice(0, 30);
+            st.innerText = `ТОП-${top.length} ПІЛОТІВ ГАЛАКТИКИ`;
+            list.innerHTML = top.map((p, i) => `
+                <div class="shop-row ${p.id === Pilot.id ? 'equipped' : ''}" style="justify-content:space-between;">
+                    <div style="font-family:Orbitron;font-size:12px;"><span style="color:var(--neon-pink)">#${i + 1}</span> ${p.name}</div>
+                    <div style="font-family:Orbitron;color:var(--neon-gold);font-weight:800;">${p.bestScore}</div>
+                </div>`).join('');
+        });
+    }
+};
+
+// ============================================================================
+// 8. MAIN GAME ENGINE: MULTI-DIRECTIONAL CAMERA, BALANCED BOSSES & MINIONS
+// ============================================================================
+const DIRECTIONS = [
+    { id: 0, name: 'ПІВНІЧ ↑', angle: 0 },
+    { id: 1, name: 'СХІД →',   angle: Math.PI / 2 },
+    { id: 2, name: 'ПІВДЕНЬ ↓', angle: Math.PI },
+    { id: 3, name: 'ЗАХІД ←',  angle: -Math.PI / 2 }
+];
+
+const BOSS_TYPES = [
+    {
+        id: 'overlord',
+        name: 'CYBER OVERLORD (ДРЕДНОУТ)',
+        color: '#ff0055',
+        accent: '#ffd000',
+        pattern: 'hover_burst', // Плавне зависання з прицільними віялами
+        minionType: 'interceptor'
+    },
+    {
+        id: 'hive',
+        name: 'SWARM QUEEN (МАТКА РОЮ)',
+        color: '#00ff88',
+        accent: '#00f0ff',
+        pattern: 'figure8_slow', // Повільна траєкторія вісімки + виклик прислужників
+        minionType: 'parasite'
+    },
+    {
+        id: 'prism',
+        name: 'OMEGA PRISM (КРИСТАЛ)',
+        color: '#b829ff',
+        accent: '#ff0055',
+        pattern: 'teleport_pause', // Телепорт із довгою паузою для зручної стрільби по ньому!
+        minionType: 'shield_drone'
+    }
+];
+
+const Game = {
+    canvas: document.getElementById('game-canvas'),
+    ctx: null,
+    w: 0, h: 0,
+    running: false,
+    isCoop: false,
+    frame: 0,
+
+    // Поворот світу кожні 2000 очок!
+    dirIndex: 0,
+    camAngle: 0,
+    targetCamAngle: 0,
+    nextRotateScore: 2000,
+
+    player: null,
+    bullets: [],
+    enemyBullets: [],
+    enemies: [],
+    boss: null,
+    nextBossScore: 1200,
+    drops: [],
+    particles: [],
+    stars: [],
+    floatTexts: [],
+
+    init() {
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        // Перетворення екранних координат дотику у повернутий світ камери!
+        const moveHandler = (clientX, clientY) => {
+            if (!this.running || !this.player || !this.player.alive) return;
+            const cx = this.w / 2;
+            const cy = this.h / 2;
+            const dx = clientX - cx;
+            const dy = clientY - cy;
+            const cos = Math.cos(-this.camAngle);
+            const sin = Math.sin(-this.camAngle);
+            const wx = cx + (dx * cos - dy * sin);
+            const wy = cy + (dx * sin + dy * cos);
+
+            this.player.tx = Math.max(30, Math.min(this.w - 30, wx));
+            this.player.ty = Math.max(40, Math.min(this.h - 40, wy));
+        };
+
+        window.addEventListener('pointerdown', e => {
+            if (e.target.closest('.screen')) return;
+            moveHandler(e.clientX, e.clientY);
+        });
+        window.addEventListener('pointermove', e => {
+            if (e.buttons > 0 || e.pointerType === 'touch') moveHandler(e.clientX, e.clientY);
+        });
+
+        requestAnimationFrame(() => this.loop());
+    },
+
+    resize() {
+        this.w = this.canvas.width = window.innerWidth;
+        this.h = this.canvas.height = window.innerHeight;
+        this.stars = Array.from({ length: 85 }, () => ({
+            x: Math.random() * this.w,
+            y: Math.random() * this.h,
+            s: Math.random() * 2.2 + 0.8,
+            sp: Math.random() * 2.5 + 1.2
+        }));
+    },
+
+    startSolo() {
+        this.isCoop = false;
+        Coop.active = false;
+        this.beginMatch();
+    },
+
+    startCoop() {
+        this.isCoop = true;
+        this.beginMatch();
+    },
+
+    restart() {
+        if (this.isCoop && Coop.active) {
+            if (Coop.isHost) Coop.hostStart();
+            this.beginMatch();
+        } else {
+            this.startSolo();
+        }
+    },
+
+    beginMatch() {
+        Sound.init();
+        this.running = true;
+        this.frame = 0;
+        this.dirIndex = 0;
+        this.camAngle = 0;
+        this.targetCamAngle = 0;
+        this.nextRotateScore = 2000;
+        this.nextBossScore = 1200;
+
+        const hull = HULLS[Save.data.equippedHull] || HULLS.viper;
+        const maxHp = hull.hp + (Save.data.hpLvl - 1) * 25;
+
+        this.player = {
+            x: this.w / 2,
+            y: this.h * 0.82,
+            tx: this.w / 2,
+            ty: this.h * 0.82,
+            hp: maxHp,
+            maxHp: maxHp,
+            alive: true,
+            score: 0,
+            coins: 0,
+            weapon: Save.data.equippedWeapon,
+            weaponLvl: 1,
+            fireCd: 0,
+            invul: 60,
+            hullId: hull.id,
+            speedMult: hull.speedMult
+        };
+
+        this.bullets = [];
+        this.enemyBullets = [];
+        this.enemies = [];
+        this.boss = null;
+        this.drops = [];
+        this.particles = [];
+        this.floatTexts = [];
+
+        // Слухач попадань від союзників (якщо ми хост у синхронному кооперативі)
+        if (this.isCoop && Coop.isHost && Coop.roomRef) {
+            Coop.roomRef.child('hits').remove();
+            Coop.roomRef.child('hits').on('child_added', snap => {
+                const hit = snap.val();
+                if (!hit) return;
+                if (hit.targetType === 'boss' && this.boss) {
+                    this.boss.hp -= hit.dmg;
+                    this.boss.hitFlash = 4;
+                } else if (hit.targetType === 'enemy') {
+                    const en = this.enemies.find(e => e.uid === hit.targetId);
+                    if (en) { en.hp -= hit.dmg; en.hitFlash = 4; }
+                }
+                snap.ref.remove().catch(() => {});
+            });
+        }
+
+        UI.show(null);
+        document.getElementById('hud').style.display = 'flex';
+        document.getElementById('hud-coop').style.display = this.isCoop ? 'block' : 'none';
+        document.getElementById('boss-hud').style.display = 'none';
+        this.updateHUD();
+    },
+
+    spawnParticles(x, y, color, count) {
+        for (let i = 0; i < count; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const s = Math.random() * 4 + 1;
+            this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, color, size: Math.random() * 3 + 1.5 });
+        }
+    },
+
+    addFloat(x, y, text, color) {
+        this.floatTexts.push({ x, y, text, color, life: 1 });
+    },
+
+    fireWeapon(shipX, shipY, weaponId, lvl, isAlly = false) {
+        const baseDmg = (14 + (Save.data.dmgLvl - 1) * 3) * (isAlly ? 0.7 : 1);
+        const wObj = WEAPONS[weaponId] || WEAPONS.plasma;
+
+        if (weaponId === 'plasma') {
+            const count = Math.min(3, lvl);
+            for (let i = 0; i < count; i++) {
+                const ox = (i - (count - 1) / 2) * 14;
+                this.bullets.push({ x: shipX + ox, y: shipY - 22, vx: 0, vy: -12, dmg: baseDmg, color: wObj.color, type: 'plasma', isAlly });
+            }
+        } else if (weaponId === 'spread') {
+            const count = 4 + Math.min(3, lvl);
+            for (let i = 0; i < count; i++) {
+                const ang = -Math.PI / 2 + (i - (count - 1) / 2) * 0.14;
+                this.bullets.push({ x: shipX, y: shipY - 20, vx: Math.cos(ang) * 11, vy: Math.sin(ang) * 11, dmg: baseDmg * 0.65, color: wObj.color, type: 'spread', isAlly });
+            }
+        } else if (weaponId === 'laser') {
+            this.bullets.push({ x: shipX, y: shipY - 26, vx: 0, vy: -18, dmg: baseDmg * 1.45, color: wObj.color, type: 'laser', pierce: 2, isAlly });
+        } else if (weaponId === 'missiles') {
+            const count = 1 + Math.min(2, Math.floor(lvl / 2));
+            for (let i = 0; i < count; i++) {
+                const side = i % 2 === 0 ? -16 : 16;
+                this.bullets.push({ x: shipX + side, y: shipY - 12, vx: side * 0.15, vy: -8.5, dmg: baseDmg * 1.2, color: wObj.color, type: 'missile', isAlly });
+            }
+        } else if (weaponId === 'tesla') {
+            this.bullets.push({ x: shipX, y: shipY - 22, vx: 0, vy: -13, dmg: baseDmg * 1.15, color: wObj.color, type: 'tesla', isAlly });
+        }
+    },
+
+    spawnBoss(typeIdx) {
+        const bSpec = BOSS_TYPES[typeIdx % BOSS_TYPES.length];
+        const squadScale = this.isCoop ? Math.max(1, Object.keys(Coop.players).length * 0.85) : 1;
+        const maxHp = Math.round((850 + this.player.score * 0.35) * squadScale);
+
+        this.boss = {
+            spec: bSpec,
+            x: this.w / 2,
+            y: -70,
+            targetX: this.w / 2,
+            targetY: 135,
+            hp: maxHp,
+            maxHp: maxHp,
+            r: 48,
+            timer: 0,
+            hitFlash: 0,
+            minionCd: 160
+        };
+        document.getElementById('boss-hud').style.display = 'block';
+        document.getElementById('boss-name').innerText = bSpec.name;
+        this.addFloat(this.w / 2, this.h / 2, '⚠️ БОС: ' + bSpec.name, '#ff0055');
+    },
+
+    spawnMinions(boss) {
+        const count = 3;
+        for (let i = 0; i < count; i++) {
+            const offset = (i - 1) * 75;
+            this.enemies.push({
+                uid: 'm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                x: Math.max(40, Math.min(this.w - 40, boss.x + offset)),
+                y: boss.y + 45,
+                vx: offset * 0.015,
+                vy: 2.1,
+                hp: 32,
+                r: 15,
+                type: 'minion',
+                color: boss.spec.accent,
+                hitFlash: 0
+            });
+        }
+        this.addFloat(boss.x, boss.y + 40, '👾 ПРИСЛУЖНИКИ БОСА!', boss.spec.accent);
+    },
+
+    update() {
+        if (!this.running) return;
+        this.frame++;
+        Sound.tick();
+
+        const p = this.player;
+
+        // Плавне обертання камери до цільового вектора польоту!
+        const diff = this.targetCamAngle - this.camAngle;
+        if (Math.abs(diff) > 0.002) {
+            this.camAngle += diff * 0.06;
+        } else {
+            this.camAngle = this.targetCamAngle;
+        }
+
+        // Регенерація Valkyrie
+        if (p.alive && p.hullId === 'valkyrie' && this.frame % 120 === 0 && p.hp < p.maxHp) {
+            p.hp = Math.min(p.maxHp, p.hp + 3);
+        }
+
+        // Рух гравця
+        if (p.alive) {
+            const lerp = 0.16 * p.speedMult;
+            p.x += (p.tx - p.x) * lerp;
+            p.y += (p.ty - p.y) * lerp;
+            if (p.invul > 0) p.invul--;
+
+            // Стрільба гравця
+            p.fireCd--;
+            const baseDelay = p.weapon === 'laser' ? 20 : (p.weapon === 'spread' ? 22 : 14);
+            const rate = Math.max(6, Math.round(baseDelay * Math.pow(0.9, Save.data.rateLvl - 1)));
+            if (p.fireCd <= 0) {
+                p.fireCd = rate;
+                this.fireWeapon(p.x, p.y, p.weapon, p.weaponLvl, false);
+                Sound.fx('shoot');
+            }
+        }
+
+        // Синхронізована стрільба союзників по кооперативу
+        if (this.isCoop && Coop.players) {
+            Object.values(Coop.players).forEach(ally => {
+                if (ally.id !== Pilot.id && ally.alive && this.frame % 16 === 0) {
+                    const ax = (ally.nx || 0.5) * this.w;
+                    const ay = (ally.ny || 0.8) * this.h;
+                    this.fireWeapon(ax, ay, ally.weapon || 'plasma', 1, true);
+                }
+            });
+        }
+
+        // Оновлення куль гравців (включаючи самонавідні ракети та теслу!)
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const b = this.bullets[i];
+
+            if (b.type === 'missile') {
+                // Пошук найближчої цілі (бос або ворог)
+                let target = this.boss || this.enemies[0];
+                let minD = 9999;
+                this.enemies.forEach(e => {
+                    const d = Math.hypot(e.x - b.x, e.y - b.y);
+                    if (d < minD) { minD = d; target = e; }
+                });
+                if (this.boss && Math.hypot(this.boss.x - b.x, this.boss.y - b.y) < minD) target = this.boss;
+                if (target) {
+                    const ang = Math.atan2(target.y - b.y, target.x - b.x);
+                    b.vx += Math.cos(ang) * 0.65;
+                    b.vy += Math.sin(ang) * 0.65;
+                    const spd = Math.hypot(b.vx, b.vy);
+                    if (spd > 11) { b.vx = (b.vx / spd) * 11; b.vy = (b.vy / spd) * 11; }
+                }
+            }
+
+            b.x += b.vx;
+            b.y += b.vy;
+
+            let remove = (b.y < -40 || b.y > this.h + 40 || b.x < -40 || b.x > this.w + 40);
+
+            // Попадання по Босу
+            if (!remove && this.boss && Math.hypot(b.x - this.boss.x, b.y - this.boss.y) < this.boss.r + 8) {
+                if (!b.isAlly) {
+                    if (!this.isCoop || Coop.isHost) {
+                        this.boss.hp -= b.dmg;
+                        this.boss.hitFlash = 4;
+                    } else {
+                        Coop.sendClientHit('boss', 'main', b.dmg);
+                        this.boss.hitFlash = 4;
+                    }
+                }
+                this.spawnParticles(b.x, b.y, b.color, 4);
+                if (b.type === 'laser' && b.pierce > 0) b.pierce--; else remove = true;
+            }
+
+            // Попадання по звичайних ворогах та прислужниках
+            if (!remove) {
+                for (let j = this.enemies.length - 1; j >= 0; j--) {
+                    const e = this.enemies[j];
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < e.r + 8) {
+                        if (!b.isAlly) {
+                            if (!this.isCoop || Coop.isHost) {
+                                e.hp -= b.dmg;
+                                e.hitFlash = 4;
+                            } else {
+                                Coop.sendClientHit('enemy', e.uid, b.dmg);
+                                e.hitFlash = 4;
+                            }
+                            // Ланцюгова блискавка Тесли по сусідньому ворогу!
+                            if (b.type === 'tesla' && this.enemies.length > 1) {
+                                const nextE = this.enemies.find(other => other !== e && Math.hypot(other.x - e.x, other.y - e.y) < 130);
+                                if (nextE) {
+                                    nextE.hp -= b.dmg * 0.6;
+                                    nextE.hitFlash = 4;
+                                    this.spawnParticles(nextE.x, nextE.y, '#b829ff', 6);
+                                }
+                            }
+                        }
+                        this.spawnParticles(b.x, b.y, b.color, 4);
+                        if (b.type === 'laser' && b.pierce > 0) b.pierce--; else { remove = true; break; }
+                    }
+                }
+            }
+
+            if (remove) this.bullets.splice(i, 1);
+        }
+
+        // ЛОГІКА ХОСТА (або Соло) ДЛЯ СПАВНУ ВОРОГІВ, БОСІВ ТА ЗМІНИ ВЕКТОРА КОЖНІ 2000 ОЧОК
+        const isAuthority = (!this.isCoop || Coop.isHost);
+
+        if (isAuthority) {
+            // Перевірка повороту світу раз на 2000 очок!
+            if (p.score >= this.nextRotateScore) {
+                this.nextRotateScore += 2000;
+                this.dirIndex = (this.dirIndex + 1) % DIRECTIONS.length;
+                this.targetCamAngle = DIRECTIONS[this.dirIndex].angle;
+                Sound.fx('rotate');
+                this.addFloat(this.w / 2, this.h / 2, '🧭 ЗМІНА КУРСУ: ' + DIRECTIONS[this.dirIndex].name, '#00ff88');
+            }
+
+            // Поява боса
+            if (!this.boss && p.score >= this.nextBossScore) {
+                const bIdx = Math.floor(this.nextBossScore / 1200) - 1;
+                this.spawnBoss(bIdx);
+                this.nextBossScore += 1800;
+            }
+
+            // Спавн звичайних ворогів (якщо немає боса)
+            if (!this.boss && this.frame % 44 === 0 && this.enemies.length < 18) {
+                const kind = Math.random();
+                this.enemies.push({
+                    uid: 'e_' + this.frame + '_' + Math.random().toString(36).slice(2, 5),
+                    x: 40 + Math.random() * (this.w - 80),
+                    y: -30,
+                    vx: (Math.random() - 0.5) * 1.4,
+                    vy: kind > 0.7 ? 2.7 : 1.9,
+                    hp: kind > 0.7 ? 24 : 42,
+                    r: kind > 0.7 ? 14 : 19,
+                    type: kind > 0.7 ? 'scout' : 'fighter',
+                    color: kind > 0.7 ? '#00ff88' : '#ff0055',
+                    hitFlash: 0
+                });
+            }
+
+            // ОНОВЛЕННЯ БОСА (ПЛАВНА, ЗБАЛАНСОВАНА ЛОГІКА АНІМАЦІЙ БЕЗ ХАОТИЧНИХ РИВКІВ!)
+            if (this.boss) {
+                const b = this.boss;
+                b.timer++;
+                if (b.hitFlash > 0) b.hitFlash--;
+
+                // Плавний вихід на бойову позицію
+                if (b.y < b.targetY) {
+                    b.y += 1.4;
+                } else {
+                    if (b.spec.pattern === 'hover_burst') {
+                        // Повільне синусоїдальне зависання по центру — легко прицілитись!
+                        b.x = (this.w / 2) + Math.sin(b.timer * 0.018) * (this.w * 0.28);
+                        b.y = 135 + Math.cos(b.timer * 0.03) * 14;
+                    } else if (b.spec.pattern === 'figure8_slow') {
+                        // Плавна вісімка на помірній швидкості
+                        b.x = (this.w / 2) + Math.sin(b.timer * 0.016) * (this.w * 0.30);
+                        b.y = 140 + Math.sin(b.timer * 0.032) * 28;
+                    } else if (b.spec.pattern === 'teleport_pause') {
+                        // Стоїть нерухомо 3.5 секунди, потім плавно змінює позицію і знову стоїть!
+                        if (b.timer % 220 === 0) {
+                            b.targetX = 80 + Math.random() * (this.w - 160);
+                        }
+                        b.x += (b.targetX - b.x) * 0.035;
+                    }
+                }
+
+                // Виклик прислужників боса!
+                b.minionCd--;
+                if (b.minionCd <= 0 && this.enemies.length < 7) {
+                    b.minionCd = 260;
+                    this.spawnMinions(b);
+                }
+
+                // Стрільба боса (передбачувані віяла з паузами)
+                if (b.timer % 85 === 0) {
+                    const shots = 5;
+                    for (let s = 0; s < shots; s++) {
+                        const ang = Math.PI / 2 + (s - 2) * 0.22;
+                        this.enemyBullets.push({ x: b.x, y: b.y + 35, vx: Math.cos(ang) * 4.2, vy: Math.sin(ang) * 4.2, color: b.spec.color });
+                    }
+                }
+
+                document.getElementById('boss-hp-fill').style.width = Math.max(0, (b.hp / b.maxHp) * 100) + '%';
+
+                if (b.hp <= 0) {
+                    Sound.fx('boom');
+                    this.spawnParticles(b.x, b.y, '#ffd000', 45);
+                    p.score += 500;
+                    for (let c = 0; c < 12; c++) {
+                        this.drops.push({ x: b.x + (Math.random() - 0.5) * 70, y: b.y + (Math.random() - 0.5) * 40, type: 'coin' });
+                    }
+                    this.drops.push({ x: b.x, y: b.y, type: 'weapon' });
+                    this.boss = null;
+                    document.getElementById('boss-hud').style.display = 'none';
+                }
+            }
+
+            // Трансляція єдиного стану світу клієнтам у синхронному кооперативі!
+            if (this.isCoop && this.frame % 4 === 0) {
+                Coop.pushHostWorld({
+                    score: p.score,
+                    dirIndex: this.dirIndex,
+                    enemies: this.enemies.map(e => ({ uid: e.uid, x: Math.round(e.x), y: Math.round(e.y), r: e.r, type: e.type, color: e.color })),
+                    boss: this.boss ? {
+                        name: this.boss.spec.name, color: this.boss.spec.color, accent: this.boss.spec.accent,
+                        x: Math.round(this.boss.x), y: Math.round(this.boss.y), hp: Math.round(this.boss.hp), maxHp: this.boss.maxHp
+                    } : null
+                });
+            }
+        } else if (this.isCoop && Coop.sharedWorld) {
+            // Клієнт у синхронному мультиплеєрі отримує той самий рахунок, вектор повороту, ворогів і боса!
+            const sw = Coop.sharedWorld;
+            p.score = sw.score || p.score;
+            if (typeof sw.dirIndex === 'number' && sw.dirIndex !== this.dirIndex) {
+                this.dirIndex = sw.dirIndex;
+                this.targetCamAngle = DIRECTIONS[this.dirIndex].angle;
+                Sound.fx('rotate');
+                this.addFloat(this.w / 2, this.h / 2, '🧭 ЗМІНА КУРСУ: ' + DIRECTIONS[this.dirIndex].name, '#00ff88');
+            }
+            this.enemies = (sw.enemies || []).map(se => ({ ...se, vx: 0, vy: 0, hp: 20, hitFlash: 0 }));
+            if (sw.boss) {
+                this.boss = {
+                    spec: { name: sw.boss.name, color: sw.boss.color, accent: sw.boss.accent },
+                    x: sw.boss.x, y: sw.boss.y, hp: sw.boss.hp, maxHp: sw.boss.maxHp, r: 48, hitFlash: 0
+                };
+                document.getElementById('boss-hud').style.display = 'block';
+                document.getElementById('boss-name').innerText = sw.boss.name;
+                document.getElementById('boss-hp-fill').style.width = Math.max(0, (sw.boss.hp / sw.boss.maxHp) * 100) + '%';
+            } else {
+                this.boss = null;
+                document.getElementById('boss-hud').style.display = 'none';
+            }
+        }
+
+        // Оновлення ворогів та зіткнень
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const e = this.enemies[i];
+            if (e.hitFlash > 0) e.hitFlash--;
+            if (isAuthority) {
+                e.x += e.vx;
+                e.y += e.vy;
+                if (e.x < 25 || e.x > this.w - 25) e.vx *= -1;
+            }
+
+            if (p.alive && Math.hypot(p.x - e.x, p.y - e.y) < e.r + 16) {
+                if (p.invul <= 0) {
+                    p.hp -= 18;
+                    p.invul = 40;
+                    Sound.fx('boom');
+                    this.spawnParticles(p.x, p.y, '#ff0055', 16);
+                    if (p.hp <= 0) this.onPlayerDeath();
+                }
+                if (isAuthority) this.enemies.splice(i, 1);
+                continue;
+            }
+
+            if (isAuthority && e.hp <= 0) {
+                Sound.fx('boom');
+                this.spawnParticles(e.x, e.y, e.color, 14);
+                p.score += (e.type === 'minion' ? 35 : 50);
+                this.drops.push({ x: e.x, y: e.y, type: 'coin' });
+                if (Math.random() < 0.14) this.drops.push({ x: e.x + 14, y: e.y, type: 'weapon' });
+                this.enemies.splice(i, 1);
+            } else if (isAuthority && e.y > this.h + 45) {
+                this.enemies.splice(i, 1);
+            }
+        }
+
+        // Ворожі кулі
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const eb = this.enemyBullets[i];
+            eb.x += eb.vx; eb.y += eb.vy;
+            if (p.alive && Math.hypot(p.x - eb.x, p.y - eb.y) < 16) {
+                if (p.invul <= 0) {
+                    p.hp -= 15; p.invul = 35; Sound.fx('boom');
+                    if (p.hp <= 0) this.onPlayerDeath();
+                }
+                this.enemyBullets.splice(i, 1);
+                continue;
+            }
+            if (eb.y > this.h + 30 || eb.x < -30 || eb.x > this.w + 30) this.enemyBullets.splice(i, 1);
+        }
+
+        // Підбір кристалів та посилень зброї
+        for (let i = this.drops.length - 1; i >= 0; i--) {
+            const d = this.drops[i];
+            d.y += 2.2;
+            if (p.alive && Math.hypot(p.x - d.x, p.y - d.y) < 30) {
+                if (d.type === 'coin') {
+                    p.coins++;
+                    Sound.fx('coin');
+                } else {
+                    p.weaponLvl = Math.min(4, p.weaponLvl + 1);
+                    Sound.fx('coin');
+                    this.addFloat(p.x, p.y - 25, '⚡ ЗБРОЯ LVL ' + p.weaponLvl, '#00f0ff');
+                }
+                this.drops.splice(i, 1);
+                continue;
+            }
+            if (d.y > this.h + 30) this.drops.splice(i, 1);
+        }
+
+        // Частинки та текст
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const pt = this.particles[i];
+            pt.x += pt.vx; pt.y += pt.vy; pt.life -= 0.04;
+            if (pt.life <= 0) this.particles.splice(i, 1);
+        }
+        for (let i = this.floatTexts.length - 1; i >= 0; i--) {
+            this.floatTexts[i].y -= 0.9;
+            this.floatTexts[i].life -= 0.022;
+            if (this.floatTexts[i].life <= 0) this.floatTexts.splice(i, 1);
+        }
+
+        // Синхронізація координат гравця кожні 4 кадри
+        if (this.isCoop && this.frame % 4 === 0) {
+            Coop.pushPlayerState(p.x / this.w, p.y / this.h, p.hp, p.alive, true);
+        }
+
+        this.updateHUD();
+    },
+
+    onPlayerDeath() {
+        const p = this.player;
+        p.alive = false;
+        p.hp = 0;
+        this.spawnParticles(p.x, p.y, '#ff0055', 40);
+
+        if (this.isCoop) {
+            Coop.pushPlayerState(p.x / this.w, p.y / this.h, 0, false, false);
+            const anyAlive = Object.values(Coop.players).some(pl => pl.id !== Pilot.id && pl.alive);
+            if (anyAlive) {
+                this.addFloat(this.w / 2, this.h / 2, '💀 ВИ ЗНИЩЕНІ! СПОСТЕРЕЖЕННЯ ЗА ЕСКАДРОЮ...', '#ffd000');
+                return;
+            }
+        }
+        this.endMatch();
+    },
+
+    updateHUD() {
+        const p = this.player;
+        if (!p) return;
+        document.getElementById('hud-hp').style.width = Math.max(0, (p.hp / p.maxHp) * 100) + '%';
+        document.getElementById('hud-score').innerText = p.score;
+        document.getElementById('hud-coins').innerText = p.coins;
+        const wName = (WEAPONS[p.weapon]?.name || 'PLASMA').split(' ')[0];
+        document.getElementById('hud-weapon').innerText = `🔫 ${wName} LVL ${p.weaponLvl}`;
+        document.getElementById('hud-dir').innerText = `🧭 ВЕКТОР: ${DIRECTIONS[this.dirIndex].name}`;
+
+        if (this.isCoop && !p.alive && Coop.players) {
+            const anyAlive = Object.values(Coop.players).some(pl => pl.alive);
+            if (!anyAlive) this.endMatch();
+        }
+    },
+
+    endMatch() {
+        this.running = false;
+        const p = this.player;
+        const coopMult = this.isCoop ? Coop.getBonus() : 1.0;
+        const hullMult = p.hullId === 'valkyrie' ? 1.25 : 1.0;
+        const earned = Math.round(p.coins * coopMult * hullMult);
+
+        Save.data.coins += earned;
+        if (p.score > Save.data.bestScore) Save.data.bestScore = p.score;
+        Save.persist();
+
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('boss-hud').style.display = 'none';
+        document.getElementById('over-score').innerText = p.score;
+        document.getElementById('over-best').innerText = Save.data.bestScore;
+        document.getElementById('over-coins').innerText = '+' + earned;
+        document.getElementById('over-toast').innerText = '';
+        UI.show('scr-over');
+    },
+
+    shareResult() {
+        const p = this.player;
+        const text = `🚀 Мій рекорд у NEON STRIKE: GALACTIC VANGUARD — ${p.score} очок!
+Залітай у бій:
+${BOT_APP_URL}`;
+        const url = `https://t.me/share/url?url=${encodeURIComponent(BOT_APP_URL)}&text=${encodeURIComponent(`🚀 Мій результат у NEON STRIKE — ${p.score} очок!`)}`;
+        if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
+        else if (navigator.clipboard) {
+            navigator.clipboard.writeText(text);
+            document.getElementById('over-toast').innerText = '✅ Результат скопійовано!';
+        }
+    },
+
+    drawBoss(ctx, b) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.fillStyle = b.hitFlash > 0 ? '#ffffff' : '#120824';
+        ctx.strokeStyle = b.spec.color;
+        ctx.lineWidth = 3.5;
+
+        // Потужний корпус дредноута боса
+        ctx.beginPath();
+        ctx.moveTo(0, 48);
+        ctx.lineTo(54, 10);
+        ctx.lineTo(44, -34);
+        ctx.lineTo(0, -46);
+        ctx.lineTo(-44, -34);
+        ctx.lineTo(-54, 10);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // Енерго-реактор у центрі
+        ctx.fillStyle = b.spec.accent;
+        ctx.beginPath();
+        ctx.arc(0, 2, 16 + Math.sin(this.frame * 0.1) * 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    },
+
+    draw() {
+        const ctx = this.ctx;
+        ctx.fillStyle = '#050711';
+        ctx.fillRect(0, 0, this.w, this.h);
+
+        // Обертаємо камеру навколо центру екрана при зміні вектора польоту кожні 2000 очок!
+        ctx.save();
+        ctx.translate(this.w / 2, this.h / 2);
+        ctx.rotate(this.camAngle);
+        ctx.translate(-this.w / 2, -this.h / 2);
+
+        // Зоряний потік
+        this.stars.forEach(st => {
+            if (this.running) {
+                st.y += st.sp;
+                if (st.y > this.h) { st.y = 0; st.x = Math.random() * this.w; }
+            }
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.35)';
+            ctx.fillRect(st.x, st.y, st.s, st.s * 2.2);
+        });
+
+        if (this.player) {
+            // Дроп
+            this.drops.forEach(d => {
+                ctx.fillStyle = d.type === 'coin' ? '#ffd000' : '#00f0ff';
+                ctx.beginPath(); ctx.arc(d.x, d.y, 7, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // Вороги та прислужники
+            this.enemies.forEach(e => {
+                ctx.save();
+                ctx.translate(e.x, e.y);
+                ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : '#160b28';
+                ctx.strokeStyle = e.color;
+                ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                if (e.type === 'minion') {
+                    ctx.moveTo(0, 15); ctx.lineTo(13, -10); ctx.lineTo(0, -4); ctx.lineTo(-13, -10);
+                } else {
+                    ctx.moveTo(0, e.r); ctx.lineTo(e.r, -e.r * 0.6); ctx.lineTo(-e.r, -e.r * 0.6);
+                }
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.restore();
+            });
+
+            // Бос
+            if (this.boss) this.drawBoss(ctx, this.boss);
+
+            // Снаряди гравців
+            this.bullets.forEach(b => {
+                ctx.fillStyle = b.color;
+                if (b.type === 'laser') {
+                    ctx.fillRect(b.x - 2, b.y - 16, 4, 32);
+                } else {
+                    ctx.beginPath(); ctx.arc(b.x, b.y, b.type === 'missile' ? 5 : 4, 0, Math.PI * 2); ctx.fill();
+                }
+            });
+
+            // Ворожі кулі
+            this.enemyBullets.forEach(eb => {
+                ctx.fillStyle = eb.color || '#ff0055';
+                ctx.beginPath(); ctx.arc(eb.x, eb.y, 5, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // Кораблі союзників у синхронному кооперативі (повноцінні спрайти в єдиному світі!)
+            if (this.isCoop && Coop.players) {
+                Object.values(Coop.players).forEach(ally => {
+                    if (ally.id !== Pilot.id && ally.alive) {
+                        const ax = (ally.nx || 0.5) * this.w;
+                        const ay = (ally.ny || 0.8) * this.h;
+                        drawShipSprite(ctx, ally.hull || 'viper', ax, ay, 0.92, 0, true, 0.88);
+                        ctx.fillStyle = '#00ff88';
+                        ctx.font = 'bold 11px Orbitron';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(ally.name, ax, ay + 34);
+                    }
+                });
+            }
+
+            // Корабель гравця
+            if (this.player.alive) {
+                const blink = (this.player.invul > 0 && Math.floor(this.frame / 4) % 2 === 0) ? 0.45 : 1;
+                drawShipSprite(ctx, this.player.hullId, this.player.x, this.player.y, 1.0, 0, true, blink);
+            }
+
+            // Частинки
+            this.particles.forEach(pt => {
+                ctx.globalAlpha = Math.max(0, pt.life);
+                ctx.fillStyle = pt.color;
+                ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
+            });
+            ctx.globalAlpha = 1;
+
+            // Повідомлення
+            this.floatTexts.forEach(ft => {
+                ctx.globalAlpha = Math.max(0, ft.life);
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 13px Orbitron';
+                ctx.textAlign = 'center';
+                ctx.fillText(ft.text, ft.x, ft.y);
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.restore();
+    },
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+window.addEventListener('load', () => {
+    Save.init();
+    Game.init();
+    if (startParamRoom) {
+        Coop.openLobby();
+        document.getElementById('coop-input-code').value = startParamRoom;
+        Coop.joinRoom(startParamRoom);
+    }
+});
+</script>
+</body>
+</html>
