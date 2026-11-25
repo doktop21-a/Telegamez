@@ -1,0 +1,1937 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon SNAKE Together</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #070811;
+    --panel: rgba(16, 20, 38, 0.88);
+    --border: rgba(0, 243, 255, 0.35);
+    --cyan: #00f3ff;
+    --pink: #ff007f;
+    --green: #00ff88;
+    --yellow: #ffd000;
+    --purple: #b537f2;
+    --text: #eef6ff;
+    --muted: #8a99bd;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(255, 0, 127, 0.12), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(0, 243, 255, 0.12), transparent 40%);
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+    overflow-y: auto;
+  }
+
+  .screen.active {
+    display: flex;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 0 30px rgba(0, 243, 255, 0.12), inset 0 0 20px rgba(0, 243, 255, 0.05);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo-wrap {
+    text-align: center;
+    margin-bottom: 18px;
+  }
+
+  .logo-top {
+    font-size: 32px;
+    font-weight: 800;
+    font-style: italic;
+    color: var(--cyan);
+    text-shadow: 0 0 12px var(--cyan), 0 0 28px rgba(0, 243, 255, 0.6);
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+
+  .logo-main {
+    font-size: 46px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    background: linear-gradient(180deg, #00f3ff 15%, #ff007f 85%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 14px rgba(255, 0, 127, 0.55));
+    line-height: 1.05;
+  }
+
+  .logo-sub {
+    margin-top: 6px;
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2.5px;
+    color: var(--yellow);
+    background: rgba(255, 208, 0, 0.1);
+    border: 1px solid rgba(255, 208, 0, 0.35);
+    padding: 4px 12px;
+    border-radius: 99px;
+  }
+
+  .field-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+  }
+
+  .input-box {
+    width: 100%;
+    background: rgba(7, 10, 22, 0.9);
+    border: 1px solid rgba(0, 243, 255, 0.35);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    outline: none;
+    transition: 0.2s;
+    margin-bottom: 14px;
+  }
+
+  .input-box:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 14px rgba(0, 243, 255, 0.3);
+  }
+
+  .color-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    justify-content: space-between;
+  }
+
+  .color-dot {
+    flex: 1;
+    height: 36px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+
+  .color-dot.selected {
+    border-color: #fff;
+    transform: scale(1.06);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 13px;
+    border: none;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.2s, opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-transform: uppercase;
+  }
+
+  .btn:active {
+    transform: scale(0.97);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #00f3ff, #0088ff);
+    color: #04101f;
+    box-shadow: 0 0 18px rgba(0, 243, 255, 0.45);
+    margin-bottom: 10px;
+  }
+
+  .btn-pink {
+    background: linear-gradient(135deg, #ff007f, #b537f2);
+    color: #fff;
+    box-shadow: 0 0 18px rgba(255, 0, 127, 0.4);
+    margin-bottom: 10px;
+  }
+
+  .btn-green {
+    background: linear-gradient(135deg, #00ff88, #00b862);
+    color: #031a0f;
+    box-shadow: 0 0 18px rgba(0, 255, 136, 0.4);
+  }
+
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .join-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .join-row .input-box {
+    margin-bottom: 0;
+    text-align: center;
+    letter-spacing: 3px;
+    font-size: 17px;
+  }
+
+  .join-row .btn {
+    width: auto;
+    padding: 0 18px;
+    white-space: nowrap;
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 14px 0;
+  }
+
+  .room-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 243, 255, 0.08);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+
+  .room-code-val {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
+  }
+
+  .player-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .player-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .player-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 99px;
+    background: rgba(0, 243, 255, 0.15);
+    color: var(--cyan);
+  }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .mode-btn {
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .mode-btn.active {
+    border-color: var(--cyan);
+    color: #fff;
+    background: rgba(0, 243, 255, 0.14);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.25);
+  }
+
+  /* GAME HUD & CANVAS */
+  #gameScreen {
+    padding: 0;
+    justify-content: flex-start;
+  }
+
+  .hud-top {
+    width: 100%;
+    padding: 10px 12px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 20;
+    background: linear-gradient(180deg, rgba(7, 8, 17, 0.96) 60%, rgba(7, 8, 17, 0));
+  }
+
+  .hud-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .stat-pill {
+    background: rgba(16, 22, 42, 0.9);
+    border: 1px solid rgba(0, 243, 255, 0.4);
+    border-radius: 99px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stat-cyan { color: var(--cyan); }
+  .stat-green { color: var(--green); }
+
+  .hud-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(16, 22, 42, 0.9);
+    color: #fff;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .exit-btn {
+    padding: 6px 14px;
+    border-radius: 99px;
+    border: 1px solid var(--pink);
+    background: rgba(255, 0, 127, 0.16);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .scoreboard-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .score-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    transition: 0.15s;
+  }
+
+  .score-chip.dead {
+    opacity: 0.45;
+    text-decoration: line-through;
+  }
+
+  .score-chip.watched {
+    border-color: var(--cyan);
+    background: rgba(0, 243, 255, 0.18);
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.35);
+  }
+
+  .chip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  #canvasWrap {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* SPECTATOR BAR (NON-BLOCKING) */
+  .spectator-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 28px);
+    max-width: 390px;
+    background: rgba(14, 18, 36, 0.92);
+    border: 1px solid var(--pink);
+    box-shadow: 0 0 22px rgba(255, 0, 127, 0.45);
+    border-radius: 18px;
+    padding: 12px 14px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 30;
+    backdrop-filter: blur(10px);
+  }
+
+  .spectator-bar.active {
+    display: flex;
+  }
+
+  .spec-title {
+    font-size: 13px;
+    font-weight: 900;
+    color: #ff4da6;
+    letter-spacing: 0.5px;
+    text-align: center;
+  }
+
+  .spec-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .spec-nav-btn {
+    padding: 8px 12px;
+    border-radius: 11px;
+    border: 1px solid rgba(0, 243, 255, 0.45);
+    background: rgba(0, 243, 255, 0.12);
+    color: var(--cyan);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .spec-nav-btn:active {
+    transform: scale(0.95);
+  }
+
+  .spec-target {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* VIRTUAL ANALOG JOYSTICK */
+  .joystick-zone {
+    position: absolute;
+    bottom: 22px;
+    right: 22px;
+    width: 136px;
+    height: 136px;
+    z-index: 25;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .joystick-base {
+    width: 124px;
+    height: 124px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0, 243, 255, 0.08) 0%, rgba(12, 18, 36, 0.65) 100%);
+    border: 2px solid rgba(0, 243, 255, 0.42);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.18), inset 0 0 14px rgba(0, 243, 255, 0.15);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .joystick-stick {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #7df9ff, #00aaff);
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 16px rgba(0, 243, 255, 0.8);
+    position: absolute;
+    transform: translate(0px, 0px);
+    transition: transform 0.05s linear;
+    pointer-events: none;
+  }
+
+  .joystick-stick.returning {
+    transition: transform 0.16s ease-out;
+  }
+
+  /* BOOST BUTTON ON LEFT */
+  .boost-btn {
+    position: absolute;
+    bottom: 42px;
+    left: 24px;
+    width: 82px;
+    height: 82px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 208, 0, 0.24), rgba(255, 0, 127, 0.22));
+    border: 2px solid rgba(255, 208, 0, 0.65);
+    box-shadow: 0 0 18px rgba(255, 208, 0, 0.3);
+    color: var(--yellow);
+    font-size: 26px;
+    font-weight: 900;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 25;
+    touch-action: none;
+  }
+
+  .boost-btn span {
+    font-size: 9px;
+    letter-spacing: 1px;
+    margin-top: 1px;
+  }
+
+  .boost-btn.pressed {
+    transform: scale(0.92);
+    background: rgba(255, 208, 0, 0.45);
+    box-shadow: 0 0 26px rgba(255, 208, 0, 0.75);
+  }
+
+  /* RESULTS MODAL */
+  .result-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    margin-bottom: 8px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .result-row.winner {
+    border: 1px solid var(--yellow);
+    background: rgba(255, 208, 0, 0.12);
+    box-shadow: 0 0 15px rgba(255, 208, 0, 0.25);
+  }
+
+  .toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 22, 44, 0.96);
+    border: 1px solid var(--cyan);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 100;
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+    display: none;
+  }
+
+  .small-links {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .small-links button {
+    background: none;
+    border: none;
+    color: var(--cyan);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- MENU SCREEN -->
+<div id="menuScreen" class="screen active">
+  <div class="card">
+    <div class="logo-wrap">
+      <div class="logo-top">Neon</div>
+      <div class="logo-main">SNAKE</div>
+      <div class="logo-sub">TOGETHER • PVP ARENA</div>
+    </div>
+
+    <div class="field-label">Твій нікнейм</div>
+    <input id="playerNameInput" class="input-box" type="text" maxlength="16" placeholder="Введи ім'я...">
+
+    <div class="field-label">Колір змійки</div>
+    <div class="color-row" id="colorPicker"></div>
+
+    <button class="btn btn-primary" onclick="createOnlineRoom()">⚡ Створити онлайн кімнату</button>
+
+    <div class="join-row">
+      <input id="roomCodeInput" class="input-box" type="tel" maxlength="4" placeholder="КОД">
+      <button class="btn btn-pink" onclick="joinRoomFromInput()">Увійти</button>
+    </div>
+
+    <button class="btn btn-ghost" onclick="startSoloWithBots()">🤖 Тренування з ботами</button>
+
+    <div class="small-links">
+      <button onclick="openRecords()">🏆 Рекорди</button>
+      <button onclick="openAbout()">ℹ️ Про розробника</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOBBY SCREEN -->
+<div id="lobbyScreen" class="screen">
+  <div class="card">
+    <div class="room-header">
+      <div>
+        <div class="field-label" style="margin-bottom:2px;">Код кімнати</div>
+        <div class="room-code-val" id="lobbyRoomCode">----</div>
+      </div>
+      <button class="btn btn-pink" style="width:auto; padding:10px 14px; margin:0; font-size:13px;" onclick="inviteFriends()">
+        📲 Запросити
+      </button>
+    </div>
+
+    <div class="field-label">Режим арени</div>
+    <div class="mode-grid">
+      <div class="mode-btn active" id="modeWalls" onclick="setRoomMode('walls')">🧱 Зі стінами</div>
+      <div class="mode-btn" id="modeWrap" onclick="setRoomMode('wrap')">🌀 Портали (без стін)</div>
+    </div>
+
+    <div class="field-label">Гравці в лобі (<span id="lobbyCount">1</span>/5)</div>
+    <div class="player-list" id="lobbyPlayersList"></div>
+
+    <button id="startMatchBtn" class="btn btn-green" onclick="hostStartGame()">🚀 Почати гру</button>
+    <div id="waitingHostNote" style="display:none; text-align:center; color:var(--cyan); font-size:13px; font-weight:700; margin-bottom:10px;">
+      ⏳ Очікуємо запуск від хоста...
+    </div>
+
+    <div class="divider"></div>
+    <button class="btn btn-ghost" onclick="leaveRoom()">Вийти з кімнати</button>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="gameScreen" class="screen">
+  <div class="hud-top">
+    <div class="hud-bar">
+      <div class="stat-pill">
+        <span class="stat-cyan">ОЧКИ: <b id="hudScore">0</b></span>
+        <span style="opacity:0.35">|</span>
+        <span class="stat-green">ДОВЖ: <b id="hudLen">4</b></span>
+      </div>
+      <div class="hud-actions">
+        <button class="icon-btn" id="soundToggleBtn" onclick="toggleSound()">🔊</button>
+        <button class="exit-btn" onclick="exitMatch()">ВИЙТИ</button>
+      </div>
+    </div>
+    <div class="scoreboard-strip" id="scoreboardStrip"></div>
+  </div>
+
+  <div id="canvasWrap">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- BOOST -->
+    <div id="boostBtn" class="boost-btn">⚡<span>БУСТ</span></div>
+
+    <!-- VIRTUAL JOYSTICK -->
+    <div id="joystickZone" class="joystick-zone">
+      <div class="joystick-base" id="joystickBase">
+        <div class="joystick-stick" id="joystickStick"></div>
+      </div>
+    </div>
+
+    <!-- SPECTATOR SWITCHER -->
+    <div id="spectatorBar" class="spectator-bar">
+      <div class="spec-title">💀 ВИ ВИБУЛИ • РЕЖИМ ГЛЯДАЧА</div>
+      <div class="spec-controls">
+        <button class="spec-nav-btn" onclick="cycleSpectator(-1)">◀ Попер.</button>
+        <div class="spec-target" id="specTargetName">Камера: ...</div>
+        <button class="spec-nav-btn" onclick="cycleSpectator(1)">Наст. ▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTS SCREEN -->
+<div id="resultsScreen" class="screen">
+  <div class="card">
+    <div class="logo-wrap" style="margin-bottom:12px;">
+      <div class="logo-top" style="font-size:24px;">Матч завершено</div>
+      <div class="logo-main" style="font-size:34px;">РЕЗУЛЬТАТИ</div>
+    </div>
+    <div id="resultsList" style="margin-bottom:16px;"></div>
+    <button class="btn btn-primary" onclick="returnAfterMatch()">🔄 Повернутись</button>
+    <button class="btn btn-pink" onclick="shareMatchResult()">📤 Поділитися результатом</button>
+  </div>
+</div>
+
+<!-- RECORDS MODAL -->
+<div id="recordsScreen" class="screen">
+  <div class="card">
+    <div class="logo-wrap">
+      <div class="logo-main" style="font-size:32px;">РЕКОРДИ</div>
+    </div>
+    <div id="recordsContent" style="margin-bottom:16px; font-size:14px;"></div>
+    <button class="btn btn-ghost" onclick="showScreen('menuScreen')">Назад</button>
+  </div>
+</div>
+
+<!-- ABOUT MODAL -->
+<div id="aboutScreen" class="screen">
+  <div class="card">
+    <div class="logo-wrap">
+      <div class="logo-top" style="font-size:22px;">Neon SNAKE</div>
+      <div class="logo-main" style="font-size:30px;">ПРО ГРУ</div>
+    </div>
+    <p style="font-size:14px; line-height:1.5; color:var(--text); margin-bottom:12px;">
+      Багатокористувацька неонова арена до 5 гравців у реальному часі з онлайн-кімнатами та режимом глядача.
+    </p>
+    <div style="background:rgba(255,255,255,0.05); padding:12px; border-radius:12px; font-size:13px; line-height:1.7; margin-bottom:16px;">
+      <div>📧 Пошта: <a href="mailto:doktop21@gmail.com" style="color:var(--cyan);">doktop21@gmail.com</a></div>
+      <div>💬 Telegram: <a href="https://t.me/doodle244" target="_blank" style="color:var(--pink); font-weight:700;">@doodle244</a></div>
+    </div>
+    <button class="btn btn-ghost" onclick="showScreen('menuScreen')">Назад</button>
+  </div>
+</div>
+
+<script>
+// ================= TELEGRAM & FIREBASE CONFIG =================
+const BOT_MINIAPP_URL = "https://t.me/HTBGame_bot/game1";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDJqPE_fhKesMuu37eIGw83C0SeATN1JJA",
+  authDomain: "htobilshegame.firebaseapp.com",
+  projectId: "htobilshegame",
+  storageBucket: "htobilshegame.firebasestorage.app",
+  messagingSenderId: "974267595254",
+  appId: "1:974267595254:web:1fc9803e2620c27f736fd7",
+  databaseURL: "https://htobilshegame-default-rtdb.europe-west1.firebasedatabase.app"
+};
+
+let db = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+} catch (e) {
+  console.warn("Firebase init fallback:", e);
+}
+
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
+}
+
+// ================= COLORS & PLAYER IDENTITY =================
+const SNAKE_COLORS = [
+  { name: "Неон Блакитний", main: "#00f3ff", glow: "rgba(0,243,255,0.7)" },
+  { name: "Неон Рожевий", main: "#ff007f", glow: "rgba(255,0,127,0.7)" },
+  { name: "Матриця Зелений", main: "#00ff88", glow: "rgba(0,255,136,0.7)" },
+  { name: "Електро Золотий", main: "#ffd000", glow: "rgba(255,208,0,0.7)" },
+  { name: "Кібер Фіолетовий", main: "#b537f2", glow: "rgba(181,55,242,0.7)" }
+];
+
+let selectedColorIdx = 0;
+let myId = localStorage.getItem("ns_player_id");
+if (!myId) {
+  myId = "p_" + Math.random().toString(36).substring(2, 10);
+  localStorage.setItem("ns_player_id", myId);
+}
+
+function getInitialName() {
+  if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+    const u = tg.initDataUnsafe.user;
+    return u.first_name || u.username || "Гравець";
+  }
+  return localStorage.getItem("ns_player_name") || "Гравець_" + Math.floor(10 + Math.random() * 89);
+}
+
+const nameInput = document.getElementById("playerNameInput");
+nameInput.value = getInitialName();
+nameInput.addEventListener("change", () => {
+  localStorage.setItem("ns_player_name", nameInput.value.trim() || "Гравець");
+});
+
+function renderColorPicker() {
+  const wrap = document.getElementById("colorPicker");
+  wrap.innerHTML = "";
+  SNAKE_COLORS.forEach((c, idx) => {
+    const dot = document.createElement("div");
+    dot.className = "color-dot" + (idx === selectedColorIdx ? " selected" : "");
+    dot.style.background = c.main;
+    dot.style.boxShadow = `0 0 12px ${c.glow}`;
+    dot.onclick = () => {
+      selectedColorIdx = idx;
+      renderColorPicker();
+    };
+    wrap.appendChild(dot);
+  });
+}
+renderColorPicker();
+
+// ================= SOUND ENGINE =================
+let soundEnabled = true;
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function playTone(freq, duration = 0.09, type = "sine", vol = 0.08) {
+  if (!soundEnabled) return;
+  try {
+    ensureAudio();
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (e) {}
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById("soundToggleBtn").textContent = soundEnabled ? "🔊" : "🔇";
+}
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = "none"; }, 2600);
+}
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+// ================= STARTAPP DEEP LINK PARSING =================
+function extractStartParam() {
+  let param = "";
+  if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) {
+    param = String(tg.initDataUnsafe.start_param);
+  }
+  if (!param) {
+    const urlParams = new URLSearchParams(window.location.search);
+    param = urlParams.get("tgWebAppStartParam") || urlParams.get("startapp") || urlParams.get("room") || "";
+  }
+  const match = param.match(/(\d{4})/);
+  return match ? match[1] : "";
+}
+
+// ================= MULTIPLAYER ROOM STATE =================
+let currentRoomCode = null;
+let isHost = false;
+let isSoloMode = false;
+let roomRef = null;
+let roomData = null;
+
+function getPlayerPayload() {
+  const cleanName = (nameInput.value.trim() || "Гравець").slice(0, 16);
+  localStorage.setItem("ns_player_name", cleanName);
+  return {
+    id: myId,
+    name: cleanName,
+    colorIdx: selectedColorIdx,
+    joinedAt: Date.now()
+  };
+}
+
+async function createOnlineRoom() {
+  ensureAudio();
+  if (!db) {
+    showToast("База даних недоступна");
+    return;
+  }
+  isSoloMode = false;
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  const player = getPlayerPayload();
+  const initialRoom = {
+    code,
+    hostId: myId,
+    status: "lobby",
+    mode: "walls",
+    createdAt: Date.now(),
+    players: {
+      [myId]: player
+    }
+  };
+  try {
+    await db.ref("snake_rooms/" + code).set(initialRoom);
+    connectToRoom(code);
+  } catch (e) {
+    showToast("Помилка створення кімнати");
+  }
+}
+
+function joinRoomFromInput() {
+  const code = document.getElementById("roomCodeInput").value.trim();
+  if (!/^\d{4}$/.test(code)) {
+    showToast("Введи 4-значний код кімнати");
+    return;
+  }
+  joinOnlineRoom(code);
+}
+
+async function joinOnlineRoom(code) {
+  ensureAudio();
+  if (!db) return;
+  isSoloMode = false;
+  try {
+    const snap = await db.ref("snake_rooms/" + code).once("value");
+    if (!snap.exists()) {
+      showToast("Кімнату " + code + " не знайдено");
+      return;
+    }
+    const data = snap.val();
+    const players = data.players || {};
+    if (Object.keys(players).length >= 5 && !players[myId]) {
+      showToast("Кімната заповнена (макс. 5)");
+      return;
+    }
+    const player = getPlayerPayload();
+    await db.ref(`snake_rooms/${code}/players/${myId}`).set(player);
+    connectToRoom(code);
+  } catch (e) {
+    showToast("Не вдалося приєднатися");
+  }
+}
+
+function connectToRoom(code) {
+  if (roomRef) roomRef.off();
+  currentRoomCode = code;
+  roomRef = db.ref("snake_rooms/" + code);
+  db.ref(`snake_rooms/${code}/players/${myId}`).onDisconnect().remove();
+
+  roomRef.on("value", (snap) => {
+    if (!snap.exists()) {
+      if (currentRoomCode) {
+        showToast("Кімнату закрито");
+        cleanupRoom();
+        showScreen("menuScreen");
+      }
+      return;
+    }
+    roomData = snap.val();
+    isHost = roomData.hostId === myId;
+    const players = roomData.players ? Object.values(roomData.players) : [];
+
+    if (!isHost && players.length > 0 && !roomData.players[roomData.hostId]) {
+      const sorted = players.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+      if (sorted[0].id === myId) {
+        db.ref(`snake_rooms/${code}/hostId`).set(myId);
+      }
+    }
+
+    if (roomData.status === "lobby") {
+      stopGameLoop();
+      updateLobbyUI();
+      showScreen("lobbyScreen");
+    } else if (roomData.status === "playing") {
+      if (!gameRunning) {
+        initMultiplayerMatch(roomData);
+      } else {
+        syncRemoteStates(roomData);
+      }
+    } else if (roomData.status === "finished") {
+      if (gameRunning) {
+        finishMatchUI(roomData.results || buildLocalResults());
+      }
+    }
+  });
+}
+
+function updateLobbyUI() {
+  if (!roomData) return;
+  document.getElementById("lobbyRoomCode").textContent = roomData.code;
+  const players = roomData.players ? Object.values(roomData.players) : [];
+  document.getElementById("lobbyCount").textContent = players.length;
+
+  document.getElementById("modeWalls").classList.toggle("active", roomData.mode !== "wrap");
+  document.getElementById("modeWrap").classList.toggle("active", roomData.mode === "wrap");
+
+  const list = document.getElementById("lobbyPlayersList");
+  list.innerHTML = "";
+  players.forEach(p => {
+    const c = SNAKE_COLORS[p.colorIdx || 0] || SNAKE_COLORS[0];
+    const row = document.createElement("div");
+    row.className = "player-item";
+    row.innerHTML = `
+      <div class="player-left">
+        <div class="swatch" style="background:${c.main}; box-shadow:0 0 8px ${c.glow};"></div>
+        <span>${escapeHtml(p.name)}</span>
+      </div>
+      <span class="badge">${p.id === roomData.hostId ? "ХОСТ" : "ГОТОВИЙ"}</span>
+    `;
+    list.appendChild(row);
+  });
+
+  document.getElementById("startMatchBtn").style.display = isHost ? "flex" : "none";
+  document.getElementById("waitingHostNote").style.display = isHost ? "none" : "block";
+}
+
+function setRoomMode(mode) {
+  if (!isHost || !currentRoomCode) return;
+  db.ref(`snake_rooms/${currentRoomCode}/mode`).set(mode);
+}
+
+// CLEAN INVITE WITHOUT BROKEN BOT SLUG OR TEXT WALL
+function inviteFriends() {
+  if (!currentRoomCode) return;
+  const directLink = `${BOT_MINIAPP_URL}?startapp=${currentRoomCode}`;
+  const shareText = `🐍 Neon SNAKE Together • Код: ${currentRoomCode}`;
+
+  if (tg && tg.openTelegramLink) {
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(directLink)}&text=${encodeURIComponent(shareText)}`;
+    tg.openTelegramLink(shareUrl);
+  } else if (navigator.share) {
+    navigator.share({ title: "Neon SNAKE", text: shareText, url: directLink }).catch(() => {});
+  } else {
+    navigator.clipboard && navigator.clipboard.writeText(`${shareText}
+${directLink}`);
+    showToast("Посилання скопійовано!");
+  }
+}
+
+async function hostStartGame() {
+  if (!isHost || !currentRoomCode || !roomData) return;
+  const players = roomData.players ? Object.values(roomData.players) : [];
+  const foods = generateInitialFoods(18);
+  const states = {};
+  players.forEach((p, idx) => {
+    states[p.id] = createInitialSnakeState(p, idx, players.length);
+  });
+  await db.ref("snake_rooms/" + currentRoomCode).update({
+    status: "playing",
+    foods,
+    states,
+    results: null,
+    startedAt: Date.now()
+  });
+}
+
+function leaveRoom() {
+  if (currentRoomCode && db) {
+    db.ref(`snake_rooms/${currentRoomCode}/players/${myId}`).remove();
+  }
+  cleanupRoom();
+  showScreen("menuScreen");
+}
+
+function cleanupRoom() {
+  stopGameLoop();
+  if (roomRef) roomRef.off();
+  roomRef = null;
+  currentRoomCode = null;
+  roomData = null;
+  isHost = false;
+}
+
+// ================= GAME ENGINE & SPECTATOR CAMERA =================
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const ARENA_W = 1400;
+const ARENA_H = 1400;
+const SEG_RADIUS = 13;
+const BASE_SPEED = 165;
+const BOOST_SPEED = 275;
+
+let gameRunning = false;
+let animFrameId = null;
+let lastFrameTime = 0;
+let syncTimer = 0;
+
+let arenaMode = "walls";
+let snakes = {};
+let foods = [];
+let particles = [];
+
+let inputAngle = null;
+let isBoosting = false;
+let spectateTargetId = null;
+let camX = ARENA_W / 2;
+let camY = ARENA_H / 2;
+
+function resizeCanvas() {
+  const wrap = document.getElementById("canvasWrap");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = wrap.clientWidth * dpr;
+  canvas.height = wrap.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resizeCanvas);
+
+function createInitialSnakeState(player, index, total) {
+  const angle = (Math.PI * 2 * index) / Math.max(total, 1);
+  const spawnR = 320;
+  const hx = ARENA_W / 2 + Math.cos(angle) * spawnR;
+  const hy = ARENA_H / 2 + Math.sin(angle) * spawnR;
+  const dir = angle + Math.PI;
+  const segments = [];
+  for (let i = 0; i < 6; i++) {
+    segments.push({
+      x: hx - Math.cos(dir) * i * 12,
+      y: hy - Math.sin(dir) * i * 12
+    });
+  }
+  return {
+    id: player.id,
+    name: player.name,
+    colorIdx: player.colorIdx || (index % SNAKE_COLORS.length),
+    alive: true,
+    score: 0,
+    dir,
+    targetDir: dir,
+    boosting: false,
+    isBot: !!player.isBot,
+    segments
+  };
+}
+
+function generateInitialFoods(count) {
+  const arr = [];
+  const types = ["orb", "orb", "orb", "gem", "bolt"];
+  for (let i = 0; i < count; i++) {
+    arr.push(makeFoodItem(types[i % types.length]));
+  }
+  return arr;
+}
+
+function makeFoodItem(type = "orb") {
+  return {
+    id: Math.random().toString(36).slice(2, 8),
+    x: 80 + Math.random() * (ARENA_W - 160),
+    y: 80 + Math.random() * (ARENA_H - 160),
+    type
+  };
+}
+
+function startSoloWithBots() {
+  ensureAudio();
+  isSoloMode = true;
+  isHost = true;
+  currentRoomCode = null;
+  arenaMode = "walls";
+
+  const me = getPlayerPayload();
+  const botNames = ["CyberViper", "NeonPhantom", "ByteHunter", "SynthApex"];
+  const all = [me];
+  botNames.forEach((bName, i) => {
+    all.push({
+      id: "bot_" + i,
+      name: bName,
+      colorIdx: (selectedColorIdx + i + 1) % SNAKE_COLORS.length,
+      isBot: true
+    });
+  });
+
+  snakes = {};
+  all.forEach((p, idx) => {
+    snakes[p.id] = createInitialSnakeState(p, idx, all.length);
+  });
+  foods = generateInitialFoods(22);
+  particles = [];
+  spectateTargetId = null;
+  document.getElementById("spectatorBar").classList.remove("active");
+  document.getElementById("joystickZone").style.display = "flex";
+  document.getElementById("boostBtn").style.display = "flex";
+
+  showScreen("gameScreen");
+  resizeCanvas();
+  startGameLoop();
+}
+
+function initMultiplayerMatch(data) {
+  arenaMode = data.mode || "walls";
+  snakes = JSON.parse(JSON.stringify(data.states || {}));
+  foods = data.foods ? Object.values(data.foods) : generateInitialFoods(18);
+  particles = [];
+  spectateTargetId = null;
+  document.getElementById("spectatorBar").classList.remove("active");
+  document.getElementById("joystickZone").style.display = "flex";
+  document.getElementById("boostBtn").style.display = "flex";
+
+  showScreen("gameScreen");
+  resizeCanvas();
+  startGameLoop();
+}
+
+function syncRemoteStates(data) {
+  if (!data.states) return;
+  for (const id in data.states) {
+    if (id === myId) continue;
+    const remote = data.states[id];
+    if (!snakes[id]) {
+      snakes[id] = remote;
+    } else {
+      snakes[id].alive = remote.alive;
+      snakes[id].score = remote.score;
+      snakes[id].dir = remote.dir;
+      snakes[id].boosting = remote.boosting;
+      snakes[id].segments = remote.segments || snakes[id].segments;
+    }
+  }
+  if (!isHost && data.foods) {
+    foods = Object.values(data.foods);
+  }
+}
+
+function startGameLoop() {
+  stopGameLoop();
+  gameRunning = true;
+  lastFrameTime = performance.now();
+  animFrameId = requestAnimationFrame(gameTick);
+}
+
+function stopGameLoop() {
+  gameRunning = false;
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  animFrameId = null;
+}
+
+function gameTick(now) {
+  if (!gameRunning) return;
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = now;
+
+  updateSimulation(dt);
+  renderGame();
+
+  animFrameId = requestAnimationFrame(gameTick);
+}
+
+function updateSimulation(dt) {
+  const me = snakes[myId];
+
+  // Update my snake steering
+  if (me && me.alive) {
+    if (inputAngle !== null) {
+      me.targetDir = inputAngle;
+    }
+    me.boosting = isBoosting && me.segments.length > 4;
+    steerSnake(me, dt);
+    advanceSnake(me, dt);
+    checkSnakeCollisions(me);
+  }
+
+  // Update bots if solo
+  if (isSoloMode) {
+    Object.values(snakes).forEach(s => {
+      if (!s.isBot || !s.alive) return;
+      updateBotAI(s, dt);
+      steerSnake(s, dt);
+      advanceSnake(s, dt);
+      checkSnakeCollisions(s);
+    });
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx * dt;
+    pt.y += pt.vy * dt;
+    pt.life -= dt;
+    if (pt.life <= 0) particles.splice(i, 1);
+  }
+
+  // Spectator handling
+  if (me && !me.alive) {
+    enterSpectatorModeIfNeeded();
+  }
+
+  // Camera follow
+  let focusSnake = (me && me.alive) ? me : (spectateTargetId ? snakes[spectateTargetId] : null);
+  if (!focusSnake || !focusSnake.alive) {
+    const aliveList = Object.values(snakes).filter(s => s.alive);
+    if (aliveList.length > 0) {
+      spectateTargetId = aliveList[0].id;
+      focusSnake = aliveList[0];
+    }
+  }
+
+  if (focusSnake && focusSnake.segments && focusSnake.segments.length > 0) {
+    const head = focusSnake.segments[0];
+    camX += (head.x - camX) * Math.min(1, dt * 8);
+    camY += (head.y - camY) * Math.min(1, dt * 8);
+  }
+
+  updateHUD();
+
+  // Check match end (1 or 0 alive when >1 started)
+  const allList = Object.values(snakes);
+  const aliveList = allList.filter(s => s.alive);
+  if (allList.length > 1 && aliveList.length <= 1) {
+    const results = buildLocalResults();
+    if (isSoloMode) {
+      finishMatchUI(results);
+    } else if (isHost && currentRoomCode) {
+      db.ref("snake_rooms/" + currentRoomCode).update({
+        status: "finished",
+        results
+      });
+    }
+    return;
+  }
+
+  // Network sync
+  if (!isSoloMode && currentRoomCode && db) {
+    syncTimer += dt;
+    if (syncTimer >= 0.065) {
+      syncTimer = 0;
+      if (me) {
+        db.ref(`snake_rooms/${currentRoomCode}/states/${myId}`).set({
+          id: me.id,
+          name: me.name,
+          colorIdx: me.colorIdx,
+          alive: me.alive,
+          score: me.score,
+          dir: me.dir,
+          boosting: me.boosting,
+          segments: me.segments
+        });
+      }
+      if (isHost) {
+        db.ref(`snake_rooms/${currentRoomCode}/foods`).set(foods);
+      }
+    }
+  }
+}
+
+function steerSnake(s, dt) {
+  let diff = s.targetDir - s.dir;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  const maxTurn = 5.4 * dt;
+  if (Math.abs(diff) <= maxTurn) s.dir = s.targetDir;
+  else s.dir += Math.sign(diff) * maxTurn;
+}
+
+function advanceSnake(s, dt) {
+  const speed = s.boosting ? BOOST_SPEED : BASE_SPEED;
+  const head = s.segments[0];
+  let nx = head.x + Math.cos(s.dir) * speed * dt;
+  let ny = head.y + Math.sin(s.dir) * speed * dt;
+
+  if (arenaMode === "wrap") {
+    if (nx < 0) nx += ARENA_W;
+    if (nx > ARENA_W) nx -= ARENA_W;
+    if (ny < 0) ny += ARENA_H;
+    if (ny > ARENA_H) ny -= ARENA_H;
+  }
+
+  s.segments.unshift({ x: nx, y: ny });
+
+  const desiredLen = 6 + Math.floor(s.score / 10);
+  while (s.segments.length > desiredLen) {
+    s.segments.pop();
+  }
+
+  // Eat food
+  for (let i = foods.length - 1; i >= 0; i--) {
+    const f = foods[i];
+    const dist = Math.hypot(nx - f.x, ny - f.y);
+    if (dist < SEG_RADIUS + 14) {
+      const pts = f.type === "gem" ? 25 : (f.type === "bolt" ? 15 : 10);
+      s.score += pts;
+      spawnBurst(f.x, f.y, SNAKE_COLORS[s.colorIdx].main, 10);
+      if (s.id === myId) playTone(560, 0.08, "triangle", 0.09);
+      foods.splice(i, 1);
+      foods.push(makeFoodItem(["orb", "orb", "gem", "bolt"][Math.floor(Math.random() * 4)]));
+    }
+  }
+}
+
+function checkSnakeCollisions(s) {
+  const head = s.segments[0];
+
+  // Wall collision
+  if (arenaMode === "walls") {
+    if (head.x < SEG_RADIUS || head.x > ARENA_W - SEG_RADIUS ||
+        head.y < SEG_RADIUS || head.y > ARENA_H - SEG_RADIUS) {
+      killSnake(s);
+      return;
+    }
+  }
+
+  // Other snakes body collision
+  for (const otherId in snakes) {
+    const other = snakes[otherId];
+    if (!other.alive || other.id === s.id) continue;
+    for (let i = 0; i < other.segments.length; i++) {
+      const seg = other.segments[i];
+      if (Math.hypot(head.x - seg.x, head.y - seg.y) < SEG_RADIUS * 1.65) {
+        other.score += 30;
+        killSnake(s);
+        return;
+      }
+    }
+  }
+}
+
+function killSnake(s) {
+  if (!s.alive) return;
+  s.alive = false;
+  const col = SNAKE_COLORS[s.colorIdx]?.main || "#ff007f";
+  s.segments.forEach((seg, idx) => {
+    if (idx % 2 === 0) spawnBurst(seg.x, seg.y, col, 6);
+  });
+  if (s.id === myId) {
+    playTone(150, 0.35, "sawtooth", 0.14);
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+    enterSpectatorModeIfNeeded();
+  }
+}
+
+function updateBotAI(bot, dt) {
+  const head = bot.segments[0];
+  let nearest = null;
+  let bestD = Infinity;
+  foods.forEach(f => {
+    const d = Math.hypot(f.x - head.x, f.y - head.y);
+    if (d < bestD) { bestD = d; nearest = f; }
+  });
+
+  let desired = bot.dir;
+  if (nearest) {
+    desired = Math.atan2(nearest.y - head.y, nearest.x - head.x);
+  }
+
+  // Avoid walls
+  const margin = 120;
+  if (arenaMode === "walls") {
+    if (head.x < margin || head.x > ARENA_W - margin || head.y < margin || head.y > ARENA_H - margin) {
+      desired = Math.atan2(ARENA_H / 2 - head.y, ARENA_W / 2 - head.x);
+    }
+  }
+
+  // Avoid other snakes
+  Object.values(snakes).forEach(other => {
+    if (other.id === bot.id || !other.alive) return;
+    other.segments.forEach(seg => {
+      const d = Math.hypot(seg.x - head.x, seg.y - head.y);
+      if (d < 95) {
+        desired = Math.atan2(head.y - seg.y, head.x - seg.x);
+      }
+    });
+  });
+
+  bot.targetDir = desired;
+  bot.boosting = false;
+}
+
+function spawnBurst(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = 50 + Math.random() * 140;
+    particles.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp,
+      color,
+      life: 0.35 + Math.random() * 0.25
+    });
+  }
+}
+
+// ================= SPECTATOR SWITCHING =================
+function enterSpectatorModeIfNeeded() {
+  const bar = document.getElementById("spectatorBar");
+  document.getElementById("joystickZone").style.display = "none";
+  document.getElementById("boostBtn").style.display = "none";
+  bar.classList.add("active");
+
+  const alive = Object.values(snakes).filter(s => s.alive);
+  if (alive.length > 0 && (!spectateTargetId || !snakes[spectateTargetId]?.alive)) {
+    spectateTargetId = alive[0].id;
+  }
+  updateSpectatorLabel();
+}
+
+function cycleSpectator(step) {
+  const alive = Object.values(snakes).filter(s => s.alive);
+  if (alive.length === 0) return;
+  let idx = alive.findIndex(s => s.id === spectateTargetId);
+  if (idx === -1) idx = 0;
+  else idx = (idx + step + alive.length) % alive.length;
+  spectateTargetId = alive[idx].id;
+  playTone(440, 0.05, "sine", 0.06);
+  updateSpectatorLabel();
+}
+
+function selectSpectatorTarget(id) {
+  const me = snakes[myId];
+  if (me && me.alive) return;
+  if (snakes[id] && snakes[id].alive) {
+    spectateTargetId = id;
+    updateSpectatorLabel();
+  }
+}
+
+function updateSpectatorLabel() {
+  const target = spectateTargetId ? snakes[spectateTargetId] : null;
+  document.getElementById("specTargetName").textContent = target
+    ? `👁 ${target.name} (${target.score})`
+    : "Очікування завершення...";
+}
+
+// ================= VIRTUAL ANALOG JOYSTICK =================
+const joystickZone = document.getElementById("joystickZone");
+const joystickStick = document.getElementById("joystickStick");
+const boostBtn = document.getElementById("boostBtn");
+let joyTouchId = null;
+
+function handleJoystickMove(clientX, clientY) {
+  const rect = joystickZone.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = clientX - cx;
+  const dy = clientY - cy;
+  const maxDist = 42;
+  const dist = Math.hypot(dx, dy);
+  const clamped = Math.min(dist, maxDist);
+  const angle = Math.atan2(dy, dx);
+
+  const stickX = Math.cos(angle) * clamped;
+  const stickY = Math.sin(angle) * clamped;
+  joystickStick.classList.remove("returning");
+  joystickStick.style.transform = `translate(${stickX}px, ${stickY}px)`;
+
+  if (dist > 8) {
+    inputAngle = angle;
+  }
+}
+
+function resetJoystick() {
+  joyTouchId = null;
+  joystickStick.classList.add("returning");
+  joystickStick.style.transform = "translate(0px, 0px)";
+}
+
+joystickZone.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  ensureAudio();
+  const touch = e.changedTouches[0];
+  joyTouchId = touch.identifier;
+  handleJoystickMove(touch.clientX, touch.clientY);
+}, { passive: false });
+
+joystickZone.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    if (t.identifier === joyTouchId) {
+      handleJoystickMove(t.clientX, t.clientY);
+      break;
+    }
+  }
+}, { passive: false });
+
+joystickZone.addEventListener("touchend", (e) => {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    if (e.changedTouches[i].identifier === joyTouchId) {
+      resetJoystick();
+      break;
+    }
+  }
+});
+
+joystickZone.addEventListener("touchcancel", resetJoystick);
+
+// Mouse fallback for desktop testing
+let mouseJoyActive = false;
+joystickZone.addEventListener("mousedown", (e) => {
+  mouseJoyActive = true;
+  handleJoystickMove(e.clientX, e.clientY);
+});
+window.addEventListener("mousemove", (e) => {
+  if (mouseJoyActive) handleJoystickMove(e.clientX, e.clientY);
+});
+window.addEventListener("mouseup", () => {
+  if (mouseJoyActive) {
+    mouseJoyActive = false;
+    resetJoystick();
+  }
+});
+
+// Boost button
+boostBtn.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  isBoosting = true;
+  boostBtn.classList.add("pressed");
+}, { passive: false });
+boostBtn.addEventListener("touchend", () => {
+  isBoosting = false;
+  boostBtn.classList.remove("pressed");
+});
+boostBtn.addEventListener("mousedown", () => {
+  isBoosting = true;
+  boostBtn.classList.add("pressed");
+});
+boostBtn.addEventListener("mouseup", () => {
+  isBoosting = false;
+  boostBtn.classList.remove("pressed");
+});
+
+// Keyboard WASD / Arrows fallback
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (k === "w" || k === "arrowup") inputAngle = -Math.PI / 2;
+  if (k === "s" || k === "arrowdown") inputAngle = Math.PI / 2;
+  if (k === "a" || k === "arrowleft") inputAngle = Math.PI;
+  if (k === "d" || k === "arrowright") inputAngle = 0;
+  if (k === " ") isBoosting = true;
+});
+window.addEventListener("keyup", (e) => {
+  if (e.key === " ") isBoosting = false;
+});
+
+// ================= HUD & RENDERING =================
+function updateHUD() {
+  const me = snakes[myId];
+  const watched = (me && me.alive) ? me : (spectateTargetId ? snakes[spectateTargetId] : me);
+  document.getElementById("hudScore").textContent = watched ? watched.score : 0;
+  document.getElementById("hudLen").textContent = watched && watched.segments ? watched.segments.length : 0;
+
+  const strip = document.getElementById("scoreboardStrip");
+  strip.innerHTML = "";
+  Object.values(snakes).forEach(s => {
+    const col = SNAKE_COLORS[s.colorIdx]?.main || "#00f3ff";
+    const chip = document.createElement("div");
+    chip.className = "score-chip" + (!s.alive ? " dead" : "") + (spectateTargetId === s.id && (!me || !me.alive) ? " watched" : "");
+    chip.onclick = () => selectSpectatorTarget(s.id);
+    chip.innerHTML = `<span class="chip-dot" style="background:${col}"></span>${escapeHtml(s.name)}: ${s.score}`;
+    strip.appendChild(chip);
+  });
+
+  if (me && !me.alive) updateSpectatorLabel();
+}
+
+function renderGame() {
+  const wrap = document.getElementById("canvasWrap");
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.translate(w / 2 - camX, h / 2 - camY);
+
+  // Cyber Grid
+  ctx.strokeStyle = "rgba(0, 243, 255, 0.08)";
+  ctx.lineWidth = 1;
+  const step = 50;
+  for (let x = 0; x <= ARENA_W; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, ARENA_H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= ARENA_H; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(ARENA_W, y);
+    ctx.stroke();
+  }
+
+  // Arena Borders
+  ctx.strokeStyle = arenaMode === "walls" ? "#b537f2" : "#00f3ff";
+  ctx.lineWidth = 6;
+  ctx.shadowColor = arenaMode === "walls" ? "#b537f2" : "#00f3ff";
+  ctx.shadowBlur = 18;
+  ctx.strokeRect(0, 0, ARENA_W, ARENA_H);
+  ctx.shadowBlur = 0;
+
+  // Foods
+  foods.forEach(f => {
+    ctx.save();
+    if (f.type === "gem") {
+      ctx.fillStyle = "#ff007f";
+      ctx.shadowColor = "#ff007f";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.moveTo(f.x, f.y - 10);
+      ctx.lineTo(f.x + 9, f.y);
+      ctx.lineTo(f.x, f.y + 10);
+      ctx.lineTo(f.x - 9, f.y);
+      ctx.closePath();
+      ctx.fill();
+    } else if (f.type === "bolt") {
+      ctx.fillStyle = "#ffd000";
+      ctx.shadowColor = "#ffd000";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "#00ff88";
+      ctx.shadowColor = "#00ff88";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+
+  // Snakes
+  Object.values(snakes).forEach(s => {
+    if (!s.alive || !s.segments || s.segments.length === 0) return;
+    const c = SNAKE_COLORS[s.colorIdx] || SNAKE_COLORS[0];
+
+    ctx.save();
+    ctx.shadowColor = c.main;
+    ctx.shadowBlur = s.boosting ? 22 : 12;
+
+    for (let i = s.segments.length - 1; i >= 0; i--) {
+      const seg = s.segments[i];
+      const r = i === 0 ? SEG_RADIUS + 2 : Math.max(8, SEG_RADIUS - i * 0.12);
+      ctx.fillStyle = i === 0 ? "#ffffff" : c.main;
+      ctx.beginPath();
+      ctx.arc(seg.x, seg.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (i === 0) {
+        ctx.strokeStyle = c.main;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }
+
+    // Player label
+    const head = s.segments[0];
+    ctx.shadowBlur = 0;
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(s.name, head.x, head.y - 22);
+    ctx.restore();
+  });
+
+  // Particles
+  particles.forEach(pt => {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, pt.life * 2);
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.restore();
+}
+
+// ================= RESULTS & EXIT =================
+function buildLocalResults() {
+  return Object.values(snakes)
+    .map(s => ({ id: s.id, name: s.name, score: s.score, alive: s.alive, colorIdx: s.colorIdx }))
+    .sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
+}
+
+function finishMatchUI(results) {
+  stopGameLoop();
+  document.getElementById("spectatorBar").classList.remove("active");
+
+  const meRes = results.find(r => r.id === myId);
+  if (meRes) saveRecord(meRes.score);
+
+  const list = document.getElementById("resultsList");
+  list.innerHTML = "";
+  results.forEach((r, idx) => {
+    const col = SNAKE_COLORS[r.colorIdx]?.main || "#00f3ff";
+    const row = document.createElement("div");
+    row.className = "result-row" + (idx === 0 ? " winner" : "");
+    row.innerHTML = `
+      <div class="player-left">
+        <span>${idx === 0 ? "👑" : `#${idx + 1}`}</span>
+        <span class="swatch" style="background:${col}"></span>
+        <span>${escapeHtml(r.name)}</span>
+      </div>
+      <span style="color:var(--cyan);">${r.score} очок</span>
+    `;
+    list.appendChild(row);
+  });
+
+  showScreen("resultsScreen");
+}
+
+function exitMatch() {
+  if (isSoloMode) {
+    stopGameLoop();
+    showScreen("menuScreen");
+  } else {
+    leaveRoom();
+  }
+}
+
+async function returnAfterMatch() {
+  if (isSoloMode) {
+    showScreen("menuScreen");
+  } else if (isHost && currentRoomCode) {
+    await db.ref(`snake_rooms/${currentRoomCode}/status`).set("lobby");
+  } else {
+    showScreen("lobbyScreen");
+  }
+}
+
+function shareMatchResult() {
+  const me = snakes[myId];
+  const score = me ? me.score : 0;
+  const text = `🐍 Я набрав ${score} очок у Neon SNAKE Together! Спробуй побити мій рекорд!`;
+  if (tg && tg.openTelegramLink) {
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(BOT_MINIAPP_URL)}&text=${encodeURIComponent(text)}`);
+  } else {
+    navigator.clipboard && navigator.clipboard.writeText(`${text}
+${BOT_MINIAPP_URL}`);
+    showToast("Результат скопійовано!");
+  }
+}
+
+// ================= RECORDS =================
+function saveRecord(score) {
+  if (!score) return;
+  const best = Number(localStorage.getItem("ns_best_score") || 0);
+  if (score > best) localStorage.setItem("ns_best_score", String(score));
+  const games = Number(localStorage.getItem("ns_games_played") || 0) + 1;
+  localStorage.setItem("ns_games_played", String(games));
+}
+
+function openRecords() {
+  const best = localStorage.getItem("ns_best_score") || 0;
+  const games = localStorage.getItem("ns_games_played") || 0;
+  document.getElementById("recordsContent").innerHTML = `
+    <div class="result-row winner"><span>🏆 Найкращий рахунок</span><span style="color:var(--yellow);">${best}</span></div>
+    <div class="result-row"><span>🎮 Зіграно матчів</span><span style="color:var(--cyan);">${games}</span></div>
+  `;
+  showScreen("recordsScreen");
+}
+
+function openAbout() {
+  showScreen("aboutScreen");
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+}
+
+// ================= AUTO-JOIN FROM INVITE =================
+window.addEventListener("DOMContentLoaded", () => {
+  const autoCode = extractStartParam();
+  if (autoCode) {
+    document.getElementById("roomCodeInput").value = autoCode;
+    joinOnlineRoom(autoCode);
+  }
+});
+</script>
+</body>
+</html>
